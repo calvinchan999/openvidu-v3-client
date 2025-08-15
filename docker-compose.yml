@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # Web Application Server (Proxy + Static Files)
+  web-app:
+    build: .
+    container_name: robot-audio-recorder-web
+    command: ["node", "simple-proxy.js"]
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    networks:
+      - robot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Headless Browser (connects to web-app)
+  headless-browser:
+    build: .
+    container_name: robot-audio-recorder-headless
+    command: ["node", "headless-launcher.js"]
+    environment:
+      - WEBSITE_URL=http://web-app:8080
+      - ROBOT_ID=robot-headless-001
+      - SESSION_NAME=HeadlessSession
+      - ENABLE_LOGGING=true
+      - KEEP_ALIVE=true
+      - RECONNECT_DELAY=5000
+      - MAX_RECONNECT_ATTEMPTS=10
+      - NODE_ENV=production
+      - DISPLAY=:99
+    volumes:
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    shm_size: 2gb
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
+    depends_on:
+      web-app:
+        condition: service_healthy
+    networks:
+      - robot-network
+    profiles:
+      - headless
+
+  # Alternative: Combined service (web + headless in one container)
+  combined:
+    build: .
+    container_name: robot-audio-recorder-combined
+    command: >
+      sh -c "
+        node simple-proxy.js &
+        sleep 10 &&
+        WEBSITE_URL=http://localhost:8080 node headless-launcher.js
+      "
+    environment:
+      - ROBOT_ID=robot-combined-001
+      - SESSION_NAME=CombinedSession
+      - ENABLE_LOGGING=true
+      - KEEP_ALIVE=true
+      - RECONNECT_DELAY=5000
+      - MAX_RECONNECT_ATTEMPTS=10
+      - NODE_ENV=production
+      - PORT=8080
+      - DISPLAY=:99
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    shm_size: 2gb
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
+    networks:
+      - robot-network
+    profiles:
+      - combined
+
+networks:
+  robot-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local

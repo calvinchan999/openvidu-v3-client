@@ -1,0 +1,43 @@
+{
+  "name": "robot-audio-recorder-launcher",
+  "version": "1.0.0",
+  "description": "Node.js launcher for Robot Audio Recorder vanilla JS application",
+  "main": "launcher.js",
+  "scripts": {
+    "start": "node launcher.js",
+    "dev": "nodemon launcher.js",
+    "serve": "http-server . -p 8080 -c-1",
+    "proxy": "node simple-proxy.js",
+    "dev-with-proxy": "npm run proxy",
+    "launch": "npm run proxy && npm start",
+    "headless": "node headless-launcher.js",
+    "headless-with-proxy": "npm run proxy & sleep 3 && npm run headless",
+    "setup-env-gui": "cp env.example .env",
+    "setup-env-headless": "cp env.headless .env",
+    "setup-env-template": "cp env.template .env"
+  },
+  "keywords": [
+    "robot",
+    "audio",
+    "recorder",
+    "openvidu",
+    "livekit",
+    "puppeteer",
+    "automation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "express": "^5.1.0",
+    "http-proxy-middleware": "^3.0.5",
+    "http-server": "^14.1.1",
+    "puppeteer": "^21.5.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
