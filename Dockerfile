@@ -1,38 +1,32 @@
-# Multi-stage build for better optimization
-FROM node:18-bullseye-slim
+# Use a pre-built image with Chrome already installed
+FROM ghcr.io/puppeteer/puppeteer:21.5.2
 
-# Install system dependencies including Chrome
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    ca-certificates \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libatspi2.0-0 \
-    libdrm2 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libxss1 \
-    libxtst6 \
-    xvfb \
-    alsa-utils \
-    pulseaudio \
-    procps \
-    && rm -rf /var/lib/apt/lists/*
+# Switch to root to install additional packages
+USER root
 
-# Add Chrome repository and install Chrome
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/googlechrome-linux-keyring.gpg \
-    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/googlechrome-linux-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+# Fix GPG issues and install additional dependencies including audio support
+RUN rm -f /etc/apt/sources.list.d/google-chrome.list /etc/apt/sources.list.d/google.list \
     && apt-get update \
-    && apt-get install -y google-chrome-stable \
+    && apt-get install -y \
+        curl \
+        procps \
+        # Audio dependencies
+        pulseaudio \
+        pulseaudio-utils \
+        alsa-utils \
+        alsa-tools \
+        # Additional system tools for audio
+        libasound2 \
+        libasound2-dev \
+        libpulse0 \
+        libpulse-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Create audio group and add pptruser to it
+# Note: This will be overridden by docker-compose user mapping
+RUN groupadd -g 1000 audio || true \
+    && usermod -a -G audio pptruser \
+    && usermod -a -G video pptruser
 
 # Set working directory
 WORKDIR /app
@@ -40,29 +34,45 @@ WORKDIR /app
 # Copy package files first for better Docker layer caching
 COPY package*.json ./
 
-# Install Node.js dependencies
-RUN npm ci --only=production
+# Install Node.js dependencies with optimizations
+# The base image already has Puppeteer installed, so we skip downloading it
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+ENV npm_config_cache=/tmp/.npm
+ENV npm_config_update_notifier=false
+
+# Use multiple optimization flags for faster npm install
+RUN npm ci --only=production \
+    --prefer-offline \
+    --no-audit \
+    --no-fund \
+    --progress=false \
+    --silent \
+    && npm cache clean --force
 
 # Copy application files
 COPY . .
 
-# Create user for running applications (Chrome doesn't run as root)
-RUN groupadd -r appuser && useradd -r -g appuser -G audio,video appuser \
-    && mkdir -p /home/appuser/Downloads /app/logs \
-    && chown -R appuser:appuser /home/appuser /app
+# Create logs directory and set permissions
+RUN mkdir -p /app/logs \
+    && chown -R pptruser:pptruser /app
 
-# Switch to non-root user
-USER appuser
+# Create audio-related directories with proper permissions
+RUN mkdir -p /tmp/.X11-unix \
+    && chown -R pptruser:audio /tmp/.X11-unix \
+    && chmod 755 /tmp/.X11-unix
+
+# Switch to the existing pptruser (from puppeteer base image)
+USER pptruser
 
 # Expose port for the application
 EXPOSE 8080
 
-# Set environment variables
+# Set environment variables (many are already set in base image)
 ENV DISPLAY=:99
-ENV CHROME_BIN=/usr/bin/google-chrome-stable
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 ENV NODE_ENV=production
+# Audio environment variables - will be set by docker-compose
+ENV ALSA_DEVICE=default
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

@@ -9,8 +9,9 @@ const config = {
     sessionName: process.env.SESSION_NAME || "HeadlessSession",
     enableLogging: process.env.ENABLE_LOGGING !== "false",
     keepAlive: process.env.KEEP_ALIVE !== "false",
-    reconnectDelay: parseInt(process.env.RECONNECT_DELAY) || 5000,
-    maxReconnectAttempts: parseInt(process.env.MAX_RECONNECT_ATTEMPTS) || 10
+    reconnectDelay: parseInt(process.env.RECONNECT_DELAY) || 30000, // Increased to 30 seconds
+    maxReconnectAttempts: parseInt(process.env.MAX_RECONNECT_ATTEMPTS) || 3, // Reduced attempts
+    headless: process.env.HEADLESS !== "false" // Default to true, set to "false" to run with GUI
 };
 
 let browser = null;
@@ -20,6 +21,11 @@ let reconnectAttempts = 0;
 async function setupAudioDevices(page) {
     // Override getUserMedia to provide fake audio stream
     await page.evaluateOnNewDocument(() => {
+        // Ensure navigator.mediaDevices exists
+        if (!navigator.mediaDevices) {
+            navigator.mediaDevices = {};
+        }
+        
         // Mock audio context for fake audio
         const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
         
@@ -111,10 +117,10 @@ async function setupPageLogging(page) {
 }
 
 async function launchBrowser() {
-    console.log("🚀 Launching headless browser...");
+    console.log(`🚀 Launching browser in ${config.headless ? 'headless' : 'GUI'} mode...`);
     
     browser = await puppeteer.launch({
-        headless: true,
+        headless: config.headless ? "new" : false, // Use config to control headless mode
         executablePath: process.env.CHROME_BIN || "/usr/bin/google-chrome-stable",
         ignoreDefaultArgs: ['--mute-audio'],
         args: [
@@ -138,7 +144,12 @@ async function launchBrowser() {
             "--allow-loopback-in-peer-connection",
             // Memory optimizations
             "--max_old_space_size=4096",
-            "--memory-pressure-off"
+            "--memory-pressure-off",
+            // Additional stability flags
+            "--disable-extensions",
+            "--disable-plugins",
+            "--disable-background-networking",
+            "--disable-sync"
         ]
     });
     
@@ -202,11 +213,11 @@ async function waitForConnection() {
     console.log("⏳ Waiting for connection...");
     
     try {
-        // Wait for connection status to change from "Disconnected"
+        // Wait longer for connection status to change from "Disconnected"
         await page.waitForFunction(() => {
             const statusElement = document.getElementById('connection-status');
             return statusElement && statusElement.textContent !== 'Disconnected';
-        }, { timeout: 30000 });
+        }, { timeout: 60000 }); // Increased timeout to 60 seconds
         
         console.log("✅ Connection established!");
         
@@ -245,12 +256,14 @@ async function monitorConnection() {
             } else {
                 // Reset reconnect attempts on successful connection
                 reconnectAttempts = 0;
+                console.log(`✅ Connection stable: ${connectionStatus}`);
             }
         } catch (error) {
             console.error("❌ Error during monitoring:", error.message);
-            await reconnect();
+            // Don't immediately reconnect on monitoring errors
+            console.log("⏳ Waiting before next monitor check...");
         }
-    }, 10000); // Check every 10 seconds
+    }, 30000); // Check every 30 seconds (increased from 10)
 }
 
 async function reconnect() {

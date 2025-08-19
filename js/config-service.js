@@ -35,9 +35,23 @@ class ConfigService {
      */
     async loadAppConfig() {
         try {
-            console.log('Loading configuration from: assets/config/dashboard-config.json');
+            // Try Docker-specific config first, then fallback to default
+            let configPath = 'assets/config/dashboard-config.json';
             
-            const response = await fetch('assets/config/dashboard-config.json');
+            // Check if we're in Docker environment by trying Docker config
+            try {
+                const dockerResponse = await fetch('assets/config/dashboard-config-docker.json');
+                if (dockerResponse.ok) {
+                    configPath = 'assets/config/dashboard-config-docker.json';
+                    console.log('Using Docker configuration');
+                }
+            } catch (dockerError) {
+                console.log('Docker config not found, using default config');
+            }
+            
+            console.log('Loading configuration from:', configPath);
+            
+            const response = await fetch(configPath);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }

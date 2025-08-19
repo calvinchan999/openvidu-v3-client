@@ -1,8 +1,6 @@
 # Docker Compose Override for Development
 # This file provides development-specific overrides
 
-version: '3.8'
-
 services:
   web-app:
     volumes:

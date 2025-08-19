@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Web Application Server (Proxy + Static Files)
   web-app:
@@ -28,6 +26,8 @@ services:
   headless-browser:
     build: .
     container_name: robot-audio-recorder-headless
+    # Use host user ID (set DOCKER_USER_ID and DOCKER_GROUP_ID in .env)
+    user: "${DOCKER_USER_ID:-1000}:${DOCKER_GROUP_ID:-1000}"
     command: ["node", "headless-launcher.js"]
     environment:
       - WEBSITE_URL=http://web-app:8080
@@ -35,19 +35,38 @@ services:
       - SESSION_NAME=HeadlessSession
       - ENABLE_LOGGING=true
       - KEEP_ALIVE=true
-      - RECONNECT_DELAY=5000
-      - MAX_RECONNECT_ATTEMPTS=10
+      - RECONNECT_DELAY=30000
+      - MAX_RECONNECT_ATTEMPTS=3
       - NODE_ENV=production
       - DISPLAY=:99
+      # Audio environment variables - use user's PulseAudio socket
+      - PULSE_SERVER=unix:/run/user/${DOCKER_USER_ID:-1000}/pulse/native
+      - ALSA_DEVICE=default
+      - HOME=/home/europa
     volumes:
       - ./logs:/app/logs
       - ./.env:/app/.env:ro
+      # Audio device passthrough
+      - /dev/snd:/dev/snd:rw
+      # X11 display (for GUI mode when needed)
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # Mount user's PulseAudio socket
+      - /run/user/${DOCKER_USER_ID:-1000}/pulse:/run/user/${DOCKER_USER_ID:-1000}/pulse:rw
+      # Mount user's audio configuration
+      - /home/europa/.config/pulse:/home/europa/.config/pulse:ro
+      # Alternative: Mount host audio devices with proper permissions
+      - /sys/class/sound:/sys/class/sound:ro
     restart: unless-stopped
     shm_size: 2gb
     security_opt:
       - seccomp:unconfined
     cap_add:
       - SYS_ADMIN
+      - SYS_NICE  # For audio priority
+      - AUDIO_WRITE
+      - AUDIO_CONTROL
+    devices:
+      - /dev/snd:/dev/snd  # Audio devices
     depends_on:
       web-app:
         condition: service_healthy
@@ -55,42 +74,6 @@ services:
       - robot-network
     profiles:
       - headless
-
-  # Alternative: Combined service (web + headless in one container)
-  combined:
-    build: .
-    container_name: robot-audio-recorder-combined
-    command: >
-      sh -c "
-        node simple-proxy.js &
-        sleep 10 &&
-        WEBSITE_URL=http://localhost:8080 node headless-launcher.js
-      "
-    environment:
-      - ROBOT_ID=robot-combined-001
-      - SESSION_NAME=CombinedSession
-      - ENABLE_LOGGING=true
-      - KEEP_ALIVE=true
-      - RECONNECT_DELAY=5000
-      - MAX_RECONNECT_ATTEMPTS=10
-      - NODE_ENV=production
-      - PORT=8080
-      - DISPLAY=:99
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./logs:/app/logs
-      - ./.env:/app/.env:ro
-    restart: unless-stopped
-    shm_size: 2gb
-    security_opt:
-      - seccomp:unconfined
-    cap_add:
-      - SYS_ADMIN
-    networks:
-      - robot-network
-    profiles:
-      - combined
 
 networks:
   robot-network:
