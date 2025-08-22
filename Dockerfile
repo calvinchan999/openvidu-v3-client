@@ -57,6 +57,16 @@ COPY . .
 RUN mkdir -p /app/logs \
     && chown -R pptruser:pptruser /app
 
+# Create user home directory structure for Chrome/Puppeteer
+RUN mkdir -p /home/europa/.local/share/applications \
+    && mkdir -p /home/europa/.config/google-chrome \
+    && mkdir -p /home/europa/.cache \
+    && chown -R pptruser:pptruser /home/europa \
+    && chmod 755 /home/europa \
+    && chmod -R 755 /home/europa/.local \
+    && chmod -R 755 /home/europa/.config \
+    && chmod -R 755 /home/europa/.cache
+
 # Create audio-related directories with proper permissions
 RUN mkdir -p /tmp/.X11-unix \
     && chown -R pptruser:audio /tmp/.X11-unix \

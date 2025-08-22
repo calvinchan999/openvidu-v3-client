@@ -39,15 +39,15 @@ class ConfigService {
             let configPath = 'assets/config/dashboard-config.json';
             
             // Check if we're in Docker environment by trying Docker config
-            try {
-                const dockerResponse = await fetch('assets/config/dashboard-config-docker.json');
-                if (dockerResponse.ok) {
-                    configPath = 'assets/config/dashboard-config-docker.json';
-                    console.log('Using Docker configuration');
-                }
-            } catch (dockerError) {
-                console.log('Docker config not found, using default config');
-            }
+            // try {
+            //     const dockerResponse = await fetch('assets/config/dashboard-config-docker.json');
+            //     if (dockerResponse.ok) {
+            //         configPath = 'assets/config/dashboard-config-docker.json';
+            //         console.log('Using Docker configuration');
+            //     }
+            // } catch (dockerError) {
+            //     console.log('Docker config not found, using default config');
+            // }
             
             console.log('Loading configuration from:', configPath);
             

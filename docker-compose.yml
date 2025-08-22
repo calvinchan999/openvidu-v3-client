@@ -50,12 +50,16 @@ services:
       - /dev/snd:/dev/snd:rw
       # X11 display (for GUI mode when needed)
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      # Mount user's PulseAudio socket
+      # Mount user's PulseAudio socket (if it exists)
       - /run/user/${DOCKER_USER_ID:-1000}/pulse:/run/user/${DOCKER_USER_ID:-1000}/pulse:rw
-      # Mount user's audio configuration
-      - /home/europa/.config/pulse:/home/europa/.config/pulse:ro
       # Alternative: Mount host audio devices with proper permissions
       - /sys/class/sound:/sys/class/sound:ro
+    tmpfs:
+      # Use tmpfs for Chrome user data directories to avoid permission issues
+      - /home/europa/.local:uid=1000,gid=1000,mode=755
+      - /home/europa/.config/google-chrome:uid=1000,gid=1000,mode=755
+      - /home/europa/.cache:uid=1000,gid=1000,mode=755
+      - /home/europa/.config/pulse:uid=1000,gid=1000,mode=755
     restart: unless-stopped
     shm_size: 2gb
     security_opt:
@@ -63,8 +67,6 @@ services:
     cap_add:
       - SYS_ADMIN
       - SYS_NICE  # For audio priority
-      - AUDIO_WRITE
-      - AUDIO_CONTROL
     devices:
       - /dev/snd:/dev/snd  # Audio devices
     depends_on:
