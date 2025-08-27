@@ -1,0 +1,54 @@
+# Alpine-based minimal image for extreme size reduction
+FROM node:18-alpine AS base
+
+# Install essential packages
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    curl
+
+# Set environment variables
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV NODE_ENV=production
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies with npm install (more compatible than npm ci)
+RUN npm install --only=production --no-audit --no-fund --silent \
+    && npm cache clean --forced
+
+# Copy application files
+COPY . .
+
+# Create logs directory
+RUN mkdir -p /app/logs
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs \
+    && adduser -S nodejs -u 1001
+
+# Change ownership
+RUN chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/local-health || exit 1
+
+# Default command
+CMD ["node", "headless-launcher.js"]

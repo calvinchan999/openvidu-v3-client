@@ -8,7 +8,6 @@
     "dev": "nodemon launcher.js",
     "serve": "http-server . -p 8080 -c-1",
     "proxy": "node simple-proxy.js",
-    "dev-with-proxy": "npm run proxy",
     "launch": "npm run proxy && npm start",
     "headless": "node headless-launcher.js",
     "headless-with-proxy": "npm run proxy & sleep 3 && npm run headless",
@@ -32,7 +31,8 @@
     "express": "^5.1.0",
     "http-proxy-middleware": "^3.0.5",
     "http-server": "^14.1.1",
-    "puppeteer": "^21.5.2"
+    "puppeteer": "^22.4.0",
+    "ws": "^8.16.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

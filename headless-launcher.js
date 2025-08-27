@@ -1,362 +1,467 @@
 require("dotenv").config();
 const puppeteer = require("puppeteer");
-const path = require("path");
 
-// Configuration
-const config = {
-    websiteUrl: process.env.WEBSITE_URL || "http://localhost:8080",
-    robotId: process.env.ROBOT_ID || "robot-headless-001",
-    sessionName: process.env.SESSION_NAME || "HeadlessSession",
-    enableLogging: process.env.ENABLE_LOGGING !== "false",
-    keepAlive: process.env.KEEP_ALIVE !== "false",
-    reconnectDelay: parseInt(process.env.RECONNECT_DELAY) || 30000, // Increased to 30 seconds
-    maxReconnectAttempts: parseInt(process.env.MAX_RECONNECT_ATTEMPTS) || 3, // Reduced attempts
-    headless: process.env.HEADLESS !== "false" // Default to true, set to "false" to run with GUI
-};
-
-let browser = null;
-let page = null;
-let reconnectAttempts = 0;
-
-async function setupAudioDevices(page) {
-    // Override getUserMedia to provide fake audio stream
-    await page.evaluateOnNewDocument(() => {
-        // Ensure navigator.mediaDevices exists
-        if (!navigator.mediaDevices) {
-            navigator.mediaDevices = {};
-        }
-        
-        // Mock audio context for fake audio
-        const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
-        
-        navigator.mediaDevices.getUserMedia = async function(constraints) {
-            console.log('getUserMedia called with constraints:', constraints);
-            
-            if (constraints.audio) {
-                // Create a fake audio stream using Web Audio API
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                const destination = audioContext.createMediaStreamDestination();
-                
-                // Create a subtle tone (optional - can be silent)
-                oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
-                gainNode.gain.setValueAtTime(0.01, audioContext.currentTime); // Very low volume
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(destination);
-                oscillator.start();
-                
-                console.log('Created fake audio stream');
-                return destination.stream;
-            }
-            
-            return originalGetUserMedia.call(this, constraints);
-        };
-        
-        // Override enumerateDevices to provide fake devices
-        const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices;
-        navigator.mediaDevices.enumerateDevices = async function() {
-            const devices = await originalEnumerateDevices.call(this);
-            
-            // Add fake audio devices if none exist
-            const hasAudioInput = devices.some(d => d.kind === 'audioinput');
-            const hasAudioOutput = devices.some(d => d.kind === 'audiooutput');
-            
-            if (!hasAudioInput) {
-                devices.push({
-                    deviceId: 'fake-audio-input',
-                    kind: 'audioinput',
-                    label: 'Fake Microphone',
-                    groupId: 'fake-group-input'
-                });
-            }
-            
-            if (!hasAudioOutput) {
-                devices.push({
-                    deviceId: 'fake-audio-output',
-                    kind: 'audiooutput',
-                    label: 'Fake Speaker',
-                    groupId: 'fake-group-output'
-                });
-            }
-            
-            console.log('Available devices:', devices);
-            return devices;
-        };
-    });
-}
-
-async function setupPageLogging(page) {
-    if (!config.enableLogging) return;
+(async () => {
+  try {
+    console.log("🚀 Launching improved headless browser for OpenVidu v3...");
     
-    // Console logging
+    // Generate participant name with unique suffix
+    const robotId = process.env.ROBOT_ID || 'robot-001';
+    const participantNamePrefix = process.env.PARTICIPANT_NAME_PREFIX || robotId;
+    const suffixLength = parseInt(process.env.PARTICIPANT_NAME_SUFFIX_LENGTH) || 8;
+    const generationMethod = process.env.PARTICIPANT_NAME_GENERATION || 'timestamp';
+    
+    let participantName;
+    if (generationMethod === 'random') {
+      // Generate random suffix
+      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      const suffix = Array.from({length: suffixLength}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      participantName = `${participantNamePrefix}_${suffix}`;
+    } else {
+      // Use timestamp-based suffix (default)
+      const timestamp = Date.now().toString(36);
+      participantName = `${participantNamePrefix}_${timestamp}`;
+    }
+    
+    // Log environment variables for debugging
+    console.log("🔧 Environment Configuration:");
+    console.log(`   - ROBOT_ID: ${robotId}`);
+    console.log(`   - PARTICIPANT_NAME: ${participantName}`);
+    console.log(`   - WEBSITE_URL: ${process.env.WEBSITE_URL}`);
+    console.log(`   - TARGET_SERVER: ${process.env.TARGET_SERVER}`);
+    console.log(`   - NODE_ENV: ${process.env.NODE_ENV}`);
+    
+    // Get Chrome arguments from environment or use defaults
+    const chromeArgs = process.env.CHROME_ARGS ? 
+      process.env.CHROME_ARGS.split(',') : [
+        "--use-fake-ui-for-media-stream",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--disable-setuid-sandbox",
+        "--disable-web-security",
+        "--allow-running-insecure-content",
+        "--unsafely-treat-insecure-origin-as-secure",
+        "--autoplay-policy=no-user-gesture-required",
+        "--hide-scrollbars",
+        "--incognito",
+        // WebRTC specific flags for OpenVidu v3
+        "--enable-features=WebRTC",
+        "--allow-loopback-in-peer-connection",
+        "--enable-audio-service-sandbox=false",
+        "--disable-audio-sandbox"
+      ];
+    
+    // Launch the browser and open a new blank page
+    const browser = await puppeteer.launch({
+      headless: true,
+      executablePath: process.env.CHROME_BIN || "/usr/bin/google-chrome-stable",
+      ignoreDefaultArgs: ['--mute-audio'],
+      args: chromeArgs
+    });
+
+    const [page] = await browser.pages();
+    
+    // Enhanced console logging with filtering based on environment
+    const logLevel = process.env.LOG_LEVEL || 'info';
+    const enableLogging = process.env.ENABLE_LOGGING === 'true';
+    
     page.on("console", (msg) => {
-        const type = msg.type();
-        const text = msg.text();
+      const type = msg.type();
+      const text = msg.text();
+      
+      if (!enableLogging) return;
+      
+      // Filter out verbose logs to focus on important ones
+      if (text.includes('Token received') || 
+          text.includes('Room connected') || 
+          text.includes('Connected to room') ||
+          text.includes('Application initialized') ||
+          text.includes('Error') ||
+          text.includes('Warning')) {
         console.log(`[BROWSER ${type.toUpperCase()}]:`, text);
+      }
     });
     
-    // Error logging
+    // Enhanced error logging
     page.on("pageerror", (error) => {
-        console.error("[BROWSER ERROR]:", error.message);
+      console.error("[BROWSER ERROR]:", error.message);
+      
+      // Handle specific OpenVidu v3 errors
+      if (error.message.includes('enableMicrophone is not a function')) {
+        console.log("⚠️ OpenVidu v3 API change detected - enableMicrophone method not found");
+        console.log("💡 This is expected in OpenVidu v3 - microphone handling is different");
+      }
     });
     
-    // Request/Response logging (optional)
-    page.on("request", (request) => {
-        if (request.url().includes('/api/') || request.url().includes('/health')) {
-            console.log(`[REQUEST]: ${request.method()} ${request.url()}`);
-        }
+    // Navigate to the OpenVidu v3 application
+    const websiteUrl = process.env.WEBSITE_URL || "http://localhost:8080";
+    const connectionTimeout = parseInt(process.env.CONNECTION_TIMEOUT) || 30000;
+    console.log(`🌐 Navigating to: ${websiteUrl}`);
+    
+    await page.goto(websiteUrl, {
+      waitUntil: "networkidle0",
+      timeout: connectionTimeout
     });
     
-    page.on("response", (response) => {
-        if (response.url().includes('/api/') || response.url().includes('/health')) {
-            console.log(`[RESPONSE]: ${response.status()} ${response.url()}`);
-        }
-    });
-}
-
-async function launchBrowser() {
-    console.log(`🚀 Launching browser in ${config.headless ? 'headless' : 'GUI'} mode...`);
+    console.log("✅ Successfully loaded the OpenVidu v3 application");
     
-    browser = await puppeteer.launch({
-        headless: config.headless ? "new" : false, // Use config to control headless mode
-        executablePath: process.env.CHROME_BIN || "/usr/bin/google-chrome-stable",
-        ignoreDefaultArgs: ['--mute-audio'],
-        args: [
-            "--use-fake-ui-for-media-stream",
-            "--use-fake-device-for-media-stream",
-            "--allow-file-access-from-files",
-            "--autoplay-policy=no-user-gesture-required",
-            "--no-sandbox",
-            "--disable-gpu",
-            "--disable-dev-shm-usage",
-            "--disable-setuid-sandbox",
-            "--disable-web-security",
-            "--allow-running-insecure-content",
-            "--unsafely-treat-insecure-origin-as-secure=http://localhost:8080",
-            "--disable-features=VizDisplayCompositor",
-            "--hide-scrollbars",
-            "--incognito",
-            // Audio-specific flags
-            "--enable-audio-service-sandbox=false",
-            "--disable-audio-sandbox",
-            "--allow-loopback-in-peer-connection",
-            // Memory optimizations
-            "--max_old_space_size=4096",
-            "--memory-pressure-off",
-            // Additional stability flags
-            "--disable-extensions",
-            "--disable-plugins",
-            "--disable-background-networking",
-            "--disable-sync"
-        ]
-    });
+    // Inject participant name and robot ID into the page context
+    console.log(`🎭 Setting participant name: ${participantName}`);
+    await page.evaluate((robotId, participantName) => {
+      // Set global variables for the OpenVidu application
+      window.ROBOT_ID = robotId;
+      window.PARTICIPANT_NAME = participantName;
+      
+      // Also set in localStorage and sessionStorage for persistence
+      if (localStorage) {
+        localStorage.setItem('robotId', robotId);
+        localStorage.setItem('participantName', participantName);
+        localStorage.setItem('defaultParticipantName', participantName);
+        localStorage.setItem('openvidu_participant_name', participantName);
+        localStorage.setItem('openvidu_room_name', robotId);
+      }
+      
+      if (sessionStorage) {
+        sessionStorage.setItem('robotId', robotId);
+        sessionStorage.setItem('participantName', participantName);
+        sessionStorage.setItem('defaultParticipantName', participantName);
+        sessionStorage.setItem('openvidu_participant_name', participantName);
+        sessionStorage.setItem('openvidu_room_name', robotId);
+      }
+      
+      // Dispatch custom event for the application to listen to
+      window.dispatchEvent(new CustomEvent('robotConfig', { 
+        detail: { 
+          robotId: robotId, 
+          participantName: participantName 
+        } 
+      }));
+      
+      console.log(`Robot configured: ${robotId} as ${participantName}`);
+      return { robotId, participantName };
+    }, robotId, participantName);
     
-    console.log("✅ Browser launched successfully");
-    return browser;
-}
-
-async function setupPage() {
-    const [firstPage] = await browser.pages();
-    page = firstPage;
+    // Wait a bit for the page to fully load, then set participant name
+    console.log("⏳ Waiting for OpenVidu application to initialize...");
+    await page.waitForTimeout(2000);
     
-    // Set viewport
-    await page.setViewport({ width: 1280, height: 720 });
-    
-    // Setup audio device mocking
-    await setupAudioDevices(page);
-    
-    // Setup logging
-    await setupPageLogging(page);
-    
-    // Set extra HTTP headers if needed
-    await page.setExtraHTTPHeaders({
-        'User-Agent': 'Robot-Audio-Recorder-Headless/1.0'
-    });
-    
-    console.log("✅ Page setup complete");
-    return page;
-}
-
-async function navigateToApp() {
-    console.log(`🌐 Navigating to: ${config.websiteUrl}`);
-    
+    // Try to set participant name in OpenVidu application
+    console.log(`🎭 Attempting to set participant name in OpenVidu app: ${participantName}`);
     try {
-        const response = await page.goto(config.websiteUrl, {
-            waitUntil: "networkidle0",
-            timeout: 30000
+      await page.evaluate((participantName) => {
+        console.log(`Setting participant name to: ${participantName}`);
+        
+        // Method 1: Look for participant name input fields
+        const participantInputs = [
+          document.querySelector('input[name="participantName"]'),
+          document.querySelector('input[placeholder*="participant"]'),
+          document.querySelector('input[placeholder*="Participant"]'),
+          document.querySelector('input[placeholder*="name"]'),
+          document.querySelector('input[placeholder*="Name"]'),
+          document.querySelector('#participantName'),
+          document.querySelector('[data-testid="participant-name"]'),
+          document.querySelector('.participant-name-input'),
+          document.querySelector('[class*="participant-name"]'),
+          document.querySelector('[class*="participantName"]'),
+          // OpenVidu specific selectors
+          document.querySelector('input[formcontrolname="participantName"]'),
+          document.querySelector('input[ng-model="participantName"]'),
+          document.querySelector('input[data-ng-model="participantName"]')
+        ];
+        
+        participantInputs.forEach(input => {
+          if (input) {
+            input.value = participantName;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            input.dispatchEvent(new Event('blur', { bubbles: true }));
+            console.log(`Set participant name input to: ${participantName}`);
+          }
         });
         
-        if (!response.ok()) {
-            throw new Error(`HTTP ${response.status()}: ${response.statusText()}`);
+        // Method 2: Try to set OpenVidu-specific configuration
+        if (window.OV) {
+          console.log('OpenVidu object found, setting participant name');
+          if (window.OV.participantName !== undefined) {
+            window.OV.participantName = participantName;
+          }
         }
         
-        console.log("✅ Successfully loaded the application");
+        // Method 3: Look for Angular/React components
+        const angularElements = document.querySelectorAll('[ng-model], [data-ng-model], [formcontrolname]');
+        angularElements.forEach(el => {
+          const attr = el.getAttribute('ng-model') || el.getAttribute('data-ng-model') || el.getAttribute('formcontrolname');
+          if (attr && attr.toLowerCase().includes('participant')) {
+            el.value = participantName;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            console.log(`Set Angular/React participant field: ${attr} = ${participantName}`);
+          }
+        });
         
-        // Wait for the app to initialize
-        await page.waitForSelector('.container', { timeout: 10000 });
-        console.log("✅ Application container found");
-        
-        // Wait for device selection to appear (it should be visible)
-        await page.waitForSelector('#device-selection', { timeout: 5000 });
-        console.log("✅ Device selection panel found");
-        
-        return true;
-    } catch (error) {
-        console.error("❌ Failed to navigate to application:", error.message);
-        return false;
-    }
-}
-
-async function waitForConnection() {
-    console.log("⏳ Waiting for connection...");
-    
-    try {
-        // Wait longer for connection status to change from "Disconnected"
-        await page.waitForFunction(() => {
-            const statusElement = document.getElementById('connection-status');
-            return statusElement && statusElement.textContent !== 'Disconnected';
-        }, { timeout: 60000 }); // Increased timeout to 60 seconds
-        
-        console.log("✅ Connection established!");
-        
-        // Log the final connection status
-        const connectionStatus = await page.$eval('#connection-status', el => el.textContent);
-        const sessionId = await page.$eval('#session-id', el => el.textContent);
-        const robotName = await page.$eval('#robot-name', el => el.textContent);
-        
-        console.log(`📊 Connection Status: ${connectionStatus}`);
-        console.log(`🔗 Session ID: ${sessionId}`);
-        console.log(`🤖 Robot Name: ${robotName}`);
-        
-        return true;
-    } catch (error) {
-        console.error("❌ Connection timeout:", error.message);
-        return false;
-    }
-}
-
-async function monitorConnection() {
-    console.log("👁️ Starting connection monitoring...");
-    
-    setInterval(async () => {
-        try {
-            if (!page || page.isClosed()) {
-                console.log("⚠️ Page is closed, attempting to reconnect...");
-                await reconnect();
-                return;
+        // Method 4: Try to find and fill any form with participant name
+        const forms = document.querySelectorAll('form');
+        forms.forEach(form => {
+          const inputs = form.querySelectorAll('input[type="text"], input[type="email"]');
+          inputs.forEach(input => {
+            const placeholder = input.placeholder || '';
+            const name = input.name || '';
+            if (placeholder.toLowerCase().includes('participant') || 
+                placeholder.toLowerCase().includes('name') ||
+                name.toLowerCase().includes('participant') ||
+                name.toLowerCase().includes('name')) {
+              input.value = participantName;
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              input.dispatchEvent(new Event('change', { bubbles: true }));
+              console.log(`Set form participant field: ${name} = ${participantName}`);
             }
-            
-            const connectionStatus = await page.$eval('#connection-status', el => el.textContent);
-            
-            if (connectionStatus === 'Disconnected') {
-                console.log("⚠️ Connection lost, attempting to reconnect...");
-                await reconnect();
-            } else {
-                // Reset reconnect attempts on successful connection
-                reconnectAttempts = 0;
-                console.log(`✅ Connection stable: ${connectionStatus}`);
+          });
+        });
+        
+        return `Attempted to set participant name to: ${participantName}`;
+      }, participantName);
+      
+      console.log("✅ Participant name setting script executed");
+    } catch (error) {
+      console.log("⚠️ Could not set participant name:", error.message);
+    }
+    
+    // Try to set the room name using ROBOT_ID if available
+    if (process.env.ROBOT_ID) {
+      console.log(`🎯 Attempting to set room name to: ${process.env.ROBOT_ID}`);
+      try {
+        // Try to set room name by injecting script into the page
+        await page.evaluate((robotId) => {
+          console.log(`Setting room name to: ${robotId}`);
+          
+          // Try multiple ways to set the room name
+          // Method 1: Look for room name input fields
+          const roomInputs = [
+            document.querySelector('input[name="roomName"]'),
+            document.querySelector('input[placeholder*="room"]'),
+            document.querySelector('input[placeholder*="Room"]'),
+            document.querySelector('#roomName'),
+            document.querySelector('[data-testid="room-name"]'),
+            document.querySelector('.room-name-input')
+          ];
+          
+          roomInputs.forEach(input => {
+            if (input) {
+              input.value = robotId;
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              input.dispatchEvent(new Event('change', { bubbles: true }));
+              console.log(`Set room name input to: ${robotId}`);
             }
-        } catch (error) {
-            console.error("❌ Error during monitoring:", error.message);
-            // Don't immediately reconnect on monitoring errors
-            console.log("⏳ Waiting before next monitor check...");
-        }
-    }, 30000); // Check every 30 seconds (increased from 10)
-}
-
-async function reconnect() {
-    if (reconnectAttempts >= config.maxReconnectAttempts) {
-        console.error(`❌ Max reconnection attempts (${config.maxReconnectAttempts}) reached. Exiting.`);
-        process.exit(1);
+          });
+          
+          // Method 2: Try to set localStorage if the app uses it
+          if (localStorage) {
+            localStorage.setItem('roomName', robotId);
+            localStorage.setItem('defaultRoom', robotId);
+            console.log(`Set localStorage room name to: ${robotId}`);
+          }
+          
+          // Method 3: Try to set sessionStorage
+          if (sessionStorage) {
+            sessionStorage.setItem('roomName', robotId);
+            sessionStorage.setItem('defaultRoom', robotId);
+            console.log(`Set sessionStorage room name to: ${robotId}`);
+          }
+          
+          // Method 4: Dispatch custom event
+          window.dispatchEvent(new CustomEvent('setRoomName', { 
+            detail: { roomName: robotId } 
+          }));
+          
+          return `Attempted to set room name to: ${robotId}`;
+        }, process.env.ROBOT_ID);
+        
+        console.log("✅ Room name setting script executed");
+      } catch (error) {
+        console.log("⚠️ Could not set room name:", error.message);
+      }
     }
     
-    reconnectAttempts++;
-    console.log(`🔄 Reconnection attempt ${reconnectAttempts}/${config.maxReconnectAttempts}`);
-    
+    // Wait for the app to initialize with better selectors
     try {
-        // Close existing browser if it exists
-        if (browser) {
-            await browser.close();
-        }
-        
-        // Wait before reconnecting
-        await new Promise(resolve => setTimeout(resolve, config.reconnectDelay));
-        
-        // Restart the entire process
-        await startApp();
+      await page.waitForSelector('.container, #app, .openvidu-app, [data-testid="app"]', { timeout: 15000 });
+      console.log("✅ Application loaded successfully");
     } catch (error) {
-        console.error("❌ Reconnection failed:", error.message);
-        // Try again after delay
-        setTimeout(reconnect, config.reconnectDelay);
+      console.log("⚠️ Could not find specific container, but page loaded");
     }
-}
-
-async function startApp() {
+    
+    // Monitor connection status
+    console.log("🔍 Monitoring OpenVidu v3 connection status...");
+    
+    // Monitor room name usage
+    console.log("🔍 Monitoring room name usage...");
     try {
-        console.log("🎯 Starting Robot Audio Recorder Headless...");
-        console.log("⚙️ Configuration:", config);
+      const roomNameInfo = await page.evaluate(() => {
+        // Look for room name in various places
+        const roomNameElements = [
+          document.querySelector('input[name="roomName"]'),
+          document.querySelector('input[placeholder*="room"]'),
+          document.querySelector('#roomName'),
+          document.querySelector('[data-testid="room-name"]'),
+          document.querySelector('.room-name-input'),
+          document.querySelector('[class*="room-name"]'),
+          document.querySelector('[class*="roomName"]')
+        ];
         
-        // Launch browser
-        await launchBrowser();
+        const roomNames = roomNameElements
+          .filter(el => el && el.value)
+          .map(el => ({ element: el.tagName, value: el.value }));
         
-        // Setup page
-        await setupPage();
+        // Check localStorage and sessionStorage
+        const storageInfo = {
+          localStorage: {
+            roomName: localStorage.getItem('roomName'),
+            defaultRoom: localStorage.getItem('defaultRoom')
+          },
+          sessionStorage: {
+            roomName: sessionStorage.getItem('roomName'),
+            defaultRoom: sessionStorage.getItem('defaultRoom')
+          }
+        };
         
-        // Navigate to application
-        const navigationSuccess = await navigateToApp();
-        if (!navigationSuccess) {
-            throw new Error("Failed to navigate to application");
-        }
-        
-        // Wait for connection
-        const connectionSuccess = await waitForConnection();
-        if (!connectionSuccess) {
-            throw new Error("Failed to establish connection");
-        }
-        
-        console.log("🎉 Robot Audio Recorder is running in headless mode!");
-        
-        // Start monitoring if keep alive is enabled
-        if (config.keepAlive) {
-            await monitorConnection();
-        }
-        
+        return { roomNames, storageInfo };
+      });
+      
+      console.log("📊 Room name information:", JSON.stringify(roomNameInfo, null, 2));
     } catch (error) {
-        console.error("❌ Application startup failed:", error.message);
+      console.log("⚠️ Could not get room name info:", error.message);
+    }
+    
+    // Monitor participant name usage
+    console.log("🔍 Monitoring participant name usage...");
+    try {
+      const participantNameInfo = await page.evaluate(() => {
+        // Look for participant name in various places
+        const participantNameElements = [
+          document.querySelector('input[name="participantName"]'),
+          document.querySelector('input[placeholder*="participant"]'),
+          document.querySelector('input[placeholder*="name"]'),
+          document.querySelector('#participantName'),
+          document.querySelector('[data-testid="participant-name"]'),
+          document.querySelector('.participant-name-input'),
+          document.querySelector('[class*="participant-name"]'),
+          document.querySelector('[class*="participantName"]')
+        ];
         
-        if (config.keepAlive && reconnectAttempts < config.maxReconnectAttempts) {
-            console.log("🔄 Attempting to restart...");
-            await reconnect();
-        } else {
-            process.exit(1);
+        const participantNames = participantNameElements
+          .filter(el => el && el.value)
+          .map(el => ({ element: el.tagName, value: el.value, placeholder: el.placeholder, name: el.name }));
+        
+        // Check localStorage and sessionStorage
+        const storageInfo = {
+          localStorage: {
+            participantName: localStorage.getItem('participantName'),
+            openvidu_participant_name: localStorage.getItem('openvidu_participant_name')
+          },
+          sessionStorage: {
+            participantName: sessionStorage.getItem('participantName'),
+            openvidu_participant_name: sessionStorage.getItem('openvidu_participant_name')
+          }
+        };
+        
+        return { participantNames, storageInfo };
+      });
+      
+      console.log("📊 Participant name information:", JSON.stringify(participantNameInfo, null, 2));
+    } catch (error) {
+      console.log("⚠️ Could not get participant name info:", error.message);
+    }
+    
+    // Wait for connection to be established
+    try {
+      await page.waitForFunction(() => {
+        // Look for various connection status indicators
+        const statusElements = [
+          document.querySelector('[data-connection-status]'),
+          document.querySelector('.connection-status'),
+          document.querySelector('#connection-status'),
+          document.querySelector('[class*="connected"]'),
+          document.querySelector('[class*="Connected"]')
+        ];
+        
+        return statusElements.some(el => el && el.textContent && 
+          (el.textContent.includes('Connected') || 
+           el.textContent.includes('connected') ||
+           el.textContent.includes('Ready')));
+      }, { timeout: connectionTimeout });
+      
+      console.log("✅ OpenVidu v3 connection established!");
+    } catch (error) {
+      console.log("⚠️ Connection timeout, but continuing to monitor...");
+    }
+    
+    // Continuous monitoring
+    console.log("👁️ Starting continuous monitoring...");
+    
+    const monitorInterval = setInterval(async () => {
+      try {
+        // Check if page is still active
+        if (page.isClosed()) {
+          console.log("❌ Page closed, stopping monitoring");
+          clearInterval(monitorInterval);
+          return;
         }
-    }
-}
-
-// Graceful shutdown
-process.on("SIGINT", async () => {
-    console.log("\n🛑 Received SIGINT, shutting down gracefully...");
+        
+        // Get current connection status
+        const status = await page.evaluate(() => {
+          const statusElements = [
+            document.querySelector('[data-connection-status]'),
+            document.querySelector('.connection-status'),
+            document.querySelector('#connection-status'),
+            document.querySelector('[class*="connected"]'),
+            document.querySelector('[class*="Connected"]')
+          ];
+          
+          return statusElements.find(el => el && el.textContent)?.textContent || 'Unknown';
+        });
+        
+        console.log(`📊 Current status: ${status}`);
+        
+        // Check for any error messages
+        const errors = await page.evaluate(() => {
+          const errorElements = document.querySelectorAll('[class*="error"], [class*="Error"], .error, .Error');
+          return Array.from(errorElements).map(el => el.textContent).filter(text => text && text.trim());
+        });
+        
+        if (errors.length > 0) {
+          console.log("⚠️ Errors detected:", errors);
+        }
+        
+      } catch (error) {
+        console.log("⚠️ Monitoring error:", error.message);
+      }
+    }, 30000); // Check every 30 seconds
     
-    if (browser) {
-        await browser.close();
-    }
+    // Keep the browser running
+    console.log("🎉 Improved headless browser is running for OpenVidu v3!");
+    console.log("📊 Monitoring connection status every 30 seconds");
+    console.log("Press Ctrl+C to stop");
     
-    console.log("✅ Shutdown complete");
-    process.exit(0);
-});
-
-process.on("SIGTERM", async () => {
-    console.log("\n🛑 Received SIGTERM, shutting down gracefully...");
+    // Handle graceful shutdown
+    process.on("SIGINT", async () => {
+      console.log("\n🛑 Shutting down gracefully...");
+      clearInterval(monitorInterval);
+      await browser.close();
+      console.log("✅ Browser closed");
+      process.exit(0);
+    });
     
-    if (browser) {
-        await browser.close();
-    }
+    process.on("SIGTERM", async () => {
+      console.log("\n🛑 Received SIGTERM, shutting down...");
+      clearInterval(monitorInterval);
+      await browser.close();
+      console.log("✅ Browser closed");
+      process.exit(0);
+    });
     
-    console.log("✅ Shutdown complete");
-    process.exit(0);
-});
-
-// Start the application
-startApp();
+  } catch (error) {
+    console.error("❌ An error occurred:", error);
+    process.exit(1);
+  }
+})();

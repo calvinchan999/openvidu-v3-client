@@ -1,12 +1,20 @@
 services:
   # Web Application Server (Proxy + Static Files)
   web-app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.web  # Use minimal Dockerfile (no Chrome needed)
     container_name: robot-audio-recorder-web
     command: ["node", "simple-proxy.js"]
     environment:
       - NODE_ENV=production
       - PORT=8080
+      - TARGET_SERVER=https://arcs-openvidu-vm.eastasia.cloudapp.azure.com
+      # Proxy configuration
+      - PROXY_TIMEOUT=30000
+      - PROXY_MAX_REDIRECTS=5
+      - PROXY_VERIFY_SSL=true
+      #      - DOCKER_ENV=true
     ports:
       - "8080:8080"
     volumes:
@@ -16,33 +24,76 @@ services:
     networks:
       - robot-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/local-health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Headless Browser (connects to web-app)
+  # Headless Browser (connects to web-app) - Use Alpine for size optimization
   headless-browser:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.alpine  # Use Alpine ONLY for headless browser
     container_name: robot-audio-recorder-headless
     # Use host user ID (set DOCKER_USER_ID and DOCKER_GROUP_ID in .env)
     user: "${DOCKER_USER_ID:-1000}:${DOCKER_GROUP_ID:-1000}"
     command: ["node", "headless-launcher.js"]
     environment:
+      # Application configuration
       - WEBSITE_URL=http://web-app:8080
-      - ROBOT_ID=robot-headless-001
-      - SESSION_NAME=HeadlessSession
+      - ROBOT_ID=robot-001
+      - NODE_ENV=production
+      - TARGET_SERVER=https://arcs-openvidu-vm.eastasia.cloudapp.azure.com
+      
+      # Participant configuration
+      - PARTICIPANT_NAME_PREFIX=robot-001
+      - PARTICIPANT_NAME_SUFFIX_LENGTH=8
+      - PARTICIPANT_NAME_GENERATION=timestamp
+      
+      # Chrome/Puppeteer configuration
+      - CHROME_BIN=/usr/bin/chromium-browser
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_CACHE_DIR=/tmp/.puppeteer
+      
+      # Display and X11 configuration
+      - DISPLAY=:99
+      - XDG_RUNTIME_DIR=/tmp/runtime
+      
+      # Audio configuration
+      - PULSE_SERVER=unix:/run/user/${DOCKER_USER_ID:-1000}/pulse/native
+      - ALSA_DEVICE=default
+      - AUDIO_DEVICE=default
+      
+      # User home and cache directories
+      # - HOME=/home/europa
+      - HOME=/app
+      - NPM_CONFIG_CACHE=/tmp/.npm
+      - NPM_CONFIG_TMP=/tmp/.npm
+      
+      # WebRTC and media configuration
+      - WEBRTC_ENABLED=true
+      - MEDIA_DEVICES_ENABLED=true
+      - AUTOPLAY_POLICY=no-user-gesture-required
+      
+      # Chrome flags for headless operation
+      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security,--allow-running-insecure-content,--use-fake-ui-for-media-stream,--autoplay-policy=no-user-gesture-required,--disable-background-timer-throttling,--disable-backgrounding-occluded-windows,--disable-renderer-backgrounding
+      
+      # Logging and debugging
       - ENABLE_LOGGING=true
+      - LOG_LEVEL=info
+      - DEBUG=false
+      
+      # Connection settings
       - KEEP_ALIVE=true
       - RECONNECT_DELAY=30000
       - MAX_RECONNECT_ATTEMPTS=3
-      - NODE_ENV=production
-      - DISPLAY=:99
-      # Audio environment variables - use user's PulseAudio socket
-      - PULSE_SERVER=unix:/run/user/${DOCKER_USER_ID:-1000}/pulse/native
-      - ALSA_DEVICE=default
-      - HOME=/home/europa
+      - CONNECTION_TIMEOUT=60000
+      
+      # Performance settings
+      - MAX_MEMORY=2048
+      - SHARED_MEMORY_SIZE=2gb
     volumes:
       - ./logs:/app/logs
       - ./.env:/app/.env:ro
@@ -53,13 +104,17 @@ services:
       # Mount user's PulseAudio socket (if it exists)
       - /run/user/${DOCKER_USER_ID:-1000}/pulse:/run/user/${DOCKER_USER_ID:-1000}/pulse:rw
       # Alternative: Mount host audio devices with proper permissions
-      - /sys/class/sound:/sys/class/sound:ro
+      #      - /sys/class/sound:/sys/class/sound:ro
     tmpfs:
       # Use tmpfs for Chrome user data directories to avoid permission issues
-      - /home/europa/.local:uid=1000,gid=1000,mode=755
-      - /home/europa/.config/google-chrome:uid=1000,gid=1000,mode=755
-      - /home/europa/.cache:uid=1000,gid=1000,mode=755
-      - /home/europa/.config/pulse:uid=1000,gid=1000,mode=755
+      # - /home/europa/.local:uid=1000,gid=1000,mode=755
+      # - /home/europa/.config/google-chrome:uid=1000,gid=1000,mode=755
+      # - /home/europa/.cache:uid=1000,gid=1000,mode=755
+      # - /home/europa/.config/pulse:uid=1000,gid=1000,mode=755
+      - /app/.local:uid=1000,gid=1000,mode=755
+      - /app/.config/chromium:uid=1000,gid=1000,mode=755
+      - /app/.cache:uid=1000,gid=1000,mode=755
+      - /app/.config/pulse:uid=1000,gid=1000,mode=755
     restart: unless-stopped
     shm_size: 2gb
     security_opt:
