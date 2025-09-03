@@ -12,7 +12,9 @@ ENV NODE_ENV=production
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+#COPY package-proxy.json ./
+#RUN mv package-proxy.json package.json
+COPY package-proxy.json ./package.json
 
 # Install only web-app dependencies (exclude puppeteer)
 RUN npm install --only=production --no-audit --no-fund --silent \
