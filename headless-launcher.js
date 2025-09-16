@@ -49,16 +49,47 @@ const puppeteer = require("puppeteer");
         "--disable-features=TranslateUI",
         "--disable-ipc-flooding-protection",
         "--enable-media-stream",
-        "--single-process"
+        "--disable-extensions",
+        "--disable-plugins"
       ];
     
-    // Launch the browser and open a new blank page
-    const browser = await puppeteer.launch({
-      headless: true,
-      executablePath: process.env.CHROME_BIN || "/usr/bin/chromium-browser",
-      ignoreDefaultArgs: ['--enable-automation', '--enable-blink-features=IdleDetection'],
-      args: chromeArgs
-    });
+    // Launch the browser with retry logic
+    let browser;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries) {
+      try {
+        console.log(`🚀 Attempting to launch browser (attempt ${retryCount + 1}/${maxRetries})...`);
+        
+        browser = await puppeteer.launch({
+          headless: true,
+          executablePath: process.env.CHROME_BIN || "/usr/bin/chromium-browser",
+          ignoreDefaultArgs: ['--enable-automation', '--enable-blink-features=IdleDetection'],
+          args: chromeArgs,
+          handleSIGINT: false,
+          handleSIGTERM: false,
+          handleSIGHUP: false,
+          timeout: 30000,
+          protocolTimeout: 10000
+        });
+        
+        console.log("✅ Browser launched successfully!");
+        break;
+        
+      } catch (error) {
+        retryCount++;
+        console.log(`❌ Browser launch attempt ${retryCount} failed:`, error.message);
+        
+        if (retryCount >= maxRetries) {
+          throw new Error(`Failed to launch browser after ${maxRetries} attempts: ${error.message}`);
+        }
+        
+        // Wait before retrying
+        console.log(`⏳ Waiting 2 seconds before retry...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
 
     const [page] = await browser.pages();
     

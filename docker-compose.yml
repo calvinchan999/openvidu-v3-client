@@ -40,7 +40,7 @@ services:
     user: "${DOCKER_USER_ID:-1000}:${DOCKER_GROUP_ID:-1000}"
     group_add:
       - audio
-    command: ["bash", "/app/startup-with-audio.sh"]
+    command: ["node", "headless-launcher.js"]
     environment:
       # Application configuration
       - WEBSITE_URL=http://web-app:8080
@@ -57,30 +57,18 @@ services:
       - CHROME_BIN=/usr/bin/chromium-browser
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-      - PUPPETEER_CACHE_DIR=/tmp/.puppeteer
-      
-      # Display and X11 configuration
-      - DISPLAY=:99
-      - XDG_RUNTIME_DIR=/tmp/runtime
       
       # Audio configuration
       - ALSA_DEVICE=default
       - AUDIO_DEVICE=default
-      - AUDIO_BACKEND=${AUDIO_BACKEND:-pulseaudio}  # pulseaudio or alsa
-      
-      # User home and cache directories
-      # - HOME=/home/europa
-      - HOME=/app
-      - NPM_CONFIG_CACHE=/tmp/.npm
-      - NPM_CONFIG_TMP=/tmp/.npm
       
       # WebRTC and media configuration
       - WEBRTC_ENABLED=true
       - MEDIA_DEVICES_ENABLED=true
       - AUTOPLAY_POLICY=no-user-gesture-required
       
-      # Chrome flags for headless operation with audio support
-      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security,--allow-running-insecure-content,--use-fake-ui-for-media-stream,--autoplay-policy=no-user-gesture-required,--disable-background-timer-throttling,--disable-backgrounding-occluded-windows,--disable-renderer-backgrounding,--use-fake-device-for-media-stream,--allow-file-access-from-files,--disable-features=VizDisplayCompositor,--enable-features=WebRTC-H264WithOpenH264FFmpeg,--disable-features=TranslateUI,--disable-ipc-flooding-protection,--enable-media-stream,--enable-webrtc-stun-origin,--disable-webrtc-hw-decoding,--disable-webrtc-hw-encoding,--alsa-output-device=plughw:2,0,--alsa-input-device=plughw:2,0
+      # Basic Chrome flags (optimized for headless)
+      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--use-fake-ui-for-media-stream,--autoplay-policy=no-user-gesture-required,--disable-features=VizDisplayCompositor,--disable-background-timer-throttling
       
       # Logging and debugging
       - ENABLE_LOGGING=true
@@ -99,24 +87,10 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./.env:/app/.env:ro
-      # Audio device passthrough
       - /dev/snd:/dev/snd:rw
-      # X11 display (for GUI mode when needed)
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      # Note: Removed host PulseAudio socket mount to avoid dependency on host PulseAudio
-      # Container will use its own PulseAudio daemon or ALSA directly
-      # Alternative: Mount host audio devices with proper permissions
-      - /sys/class/sound:/sys/class/sound:ro
     tmpfs:
-      # Use tmpfs for Chrome user data directories to avoid permission issues
-      # - /home/europa/.local:uid=1000,gid=1000,mode=755
-      # - /home/europa/.config/google-chrome:uid=1000,gid=1000,mode=755
-      # - /home/europa/.cache:uid=1000,gid=1000,mode=755
-      # - /home/europa/.config/pulse:uid=1000,gid=1000,mode=755
-      - /app/.local:uid=1000,gid=1000,mode=755
       - /app/.config/chromium:uid=1000,gid=1000,mode=755
       - /app/.cache:uid=1000,gid=1000,mode=755
-      - /app/.config/pulse:uid=1000,gid=1000,mode=755
     restart: unless-stopped
     shm_size: 2gb
     security_opt:
@@ -134,7 +108,7 @@ services:
     networks:
       - robot-network
     healthcheck:
-      test: ["CMD", "bash", "-c", "pactl info >/dev/null 2>&1 && curl -f http://web-app:8080/local-health"]
+      test: ["CMD", "curl", "-f", "http://web-app:8080/local-health"]
       interval: 30s
       timeout: 10s
       retries: 5
