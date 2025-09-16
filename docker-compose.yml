@@ -41,7 +41,7 @@ services:
     # Use host user ID (set DOCKER_USER_ID and DOCKER_GROUP_ID in .env)
     user: "${DOCKER_USER_ID:-1000}:${DOCKER_GROUP_ID:-1000}"
     group_add:
-      - audio
+      - "29"  # Host audio group ID
     command: ["node", "headless-launcher.js"]
     environment:
       # Application configuration

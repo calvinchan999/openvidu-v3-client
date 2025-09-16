@@ -158,10 +158,16 @@ export PULSE_SERVER="${PULSE_SERVER:-unix:/tmp/pulse-socket}"
 export ALSA_DEVICE="${ALSA_DEVICE:-default}"
 export AUDIO_DEVICE="${AUDIO_DEVICE:-default}"
 
+# For direct ALSA access when PulseAudio is not available
+export ALSA_PCM_CARD="${ALSA_PCM_CARD:-0}"
+export ALSA_PCM_DEVICE="${ALSA_PCM_DEVICE:-0}"
+
 log "📋 Audio environment:"
 log "   PULSE_SERVER: $PULSE_SERVER"
 log "   ALSA_DEVICE: $ALSA_DEVICE"
 log "   AUDIO_DEVICE: $AUDIO_DEVICE"
+log "   ALSA_PCM_CARD: $ALSA_PCM_CARD"
+log "   ALSA_PCM_DEVICE: $ALSA_PCM_DEVICE"
 
 # Create runtime directories
 log "📁 Creating runtime directories..."

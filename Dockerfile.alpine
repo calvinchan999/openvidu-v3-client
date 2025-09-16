@@ -47,14 +47,31 @@ RUN echo "default-server = unix:/tmp/pulse-socket" > /etc/pulse/client.conf && \
     echo "extra-arguments = --log-target=syslog" >> /etc/pulse/client.conf
 
 # Create ALSA configuration for better device access
-RUN echo "pcm.!default { type pulse server unix:/tmp/pulse-socket }" > /etc/asound.conf && \
-    echo "ctl.!default { type pulse server unix:/tmp/pulse-socket }" >> /etc/asound.conf
+RUN echo "# ALSA configuration for container audio access" > /etc/asound.conf && \
+    echo "# Try PulseAudio first, fallback to direct hardware access" >> /etc/asound.conf && \
+    echo "pcm.!default {" >> /etc/asound.conf && \
+    echo "    type pulse" >> /etc/asound.conf && \
+    echo "    server unix:/tmp/pulse-socket" >> /etc/asound.conf && \
+    echo "    fallback {" >> /etc/asound.conf && \
+    echo "        type hw" >> /etc/asound.conf && \
+    echo "        card 0" >> /etc/asound.conf && \
+    echo "        device 0" >> /etc/asound.conf && \
+    echo "    }" >> /etc/asound.conf && \
+    echo "}" >> /etc/asound.conf && \
+    echo "ctl.!default {" >> /etc/asound.conf && \
+    echo "    type pulse" >> /etc/asound.conf && \
+    echo "    server unix:/tmp/pulse-socket" >> /etc/asound.conf && \
+    echo "    fallback {" >> /etc/asound.conf && \
+    echo "        type hw" >> /etc/asound.conf && \
+    echo "        card 0" >> /etc/asound.conf && \
+    echo "    }" >> /etc/asound.conf && \
+    echo "}" >> /etc/asound.conf
 
 # Copy and set up the audio setup script
 COPY setup-audio.sh /app/setup-audio.sh
 RUN chmod +x /app/setup-audio.sh
 
-# Create audio group and user
+# Create audio group and user with correct group ID for host compatibility
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
     addgroup -g 29 -S audio 2>/dev/null || true && \
