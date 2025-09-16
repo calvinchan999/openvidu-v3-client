@@ -49,7 +49,22 @@ const puppeteer = require("puppeteer");
         "--enable-features=WebRTC",
         "--allow-loopback-in-peer-connection",
         "--enable-audio-service-sandbox=false",
-        "--disable-audio-sandbox"
+        "--disable-audio-sandbox",
+        // Audio device access flags
+        "--use-fake-device-for-media-stream",
+        "--allow-file-access-from-files",
+        "--disable-features=VizDisplayCompositor",
+        "--enable-features=WebRTC-H264WithOpenH264FFmpeg",
+        "--disable-background-timer-throttling",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-renderer-backgrounding",
+        "--disable-features=TranslateUI",
+        "--disable-ipc-flooding-protection",
+        // Audio permissions
+        "--enable-media-stream",
+        "--enable-webrtc-stun-origin",
+        "--disable-webrtc-hw-decoding",
+        "--disable-webrtc-hw-encoding"
       ];
     
     // Launch the browser and open a new blank page
@@ -106,6 +121,83 @@ const puppeteer = require("puppeteer");
     
     console.log("✅ Successfully loaded the OpenVidu v3 application");
     
+    // Inject audio device access helpers
+    await page.evaluate(() => {
+      console.log("Injecting audio device access helpers...");
+      
+      // Override getUserMedia to provide fake devices if needed
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        
+        navigator.mediaDevices.getUserMedia = async (constraints) => {
+          console.log("getUserMedia called with constraints:", constraints);
+          
+          try {
+            // Try to get real devices first
+            const stream = await originalGetUserMedia(constraints);
+            console.log("Successfully got real media stream");
+            return stream;
+          } catch (error) {
+            console.log("Failed to get real media stream, using fake stream:", error.message);
+            
+            // Create a fake audio stream if real devices fail
+            if (constraints.audio) {
+              const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+              const oscillator = audioContext.createOscillator();
+              const gainNode = audioContext.createGain();
+              
+              oscillator.connect(gainNode);
+              gainNode.connect(audioContext.destination);
+              
+              oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+              gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+              
+              // Create a MediaStream from the audio context
+              const destination = audioContext.createMediaStreamDestination();
+              gainNode.connect(destination);
+              
+              return destination.stream;
+            }
+            
+            throw error;
+          }
+        };
+      }
+      
+      // Override enumerateDevices to provide fake devices
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
+        
+        navigator.mediaDevices.enumerateDevices = async () => {
+          try {
+            const devices = await originalEnumerateDevices();
+            console.log("Successfully enumerated real devices:", devices.length);
+            return devices;
+          } catch (error) {
+            console.log("Failed to enumerate real devices, providing fake devices:", error.message);
+            
+            // Return fake devices
+            return [
+              {
+                deviceId: "fake-audio-input",
+                kind: "audioinput",
+                label: "Fake Microphone",
+                groupId: "fake-group"
+              },
+              {
+                deviceId: "fake-audio-output",
+                kind: "audiooutput", 
+                label: "Fake Speaker",
+                groupId: "fake-group"
+              }
+            ];
+          }
+        };
+      }
+      
+      console.log("Audio device access helpers injected successfully");
+    });
+    
     // Inject participant name and robot ID into the page context
     console.log(`🎭 Setting participant name: ${participantName}`);
     await page.evaluate((robotId, participantName) => {
@@ -144,7 +236,7 @@ const puppeteer = require("puppeteer");
     
     // Wait a bit for the page to fully load, then set participant name
     console.log("⏳ Waiting for OpenVidu application to initialize...");
-    await page.waitForTimeout(2000);
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Try to set participant name in OpenVidu application
     console.log(`🎭 Attempting to set participant name in OpenVidu app: ${participantName}`);

@@ -1,7 +1,11 @@
 {
   "robotId": "robot-001",
   "server": {
-    "endpoint": "http://localhost:8080"
+    "endpoint": "http://web-app:8080"
+  },
+  "livekitServer": {
+    "url": "wss://arcs-openvidu-vm.eastasia.cloudapp.azure.com",
+    "applicationServer": "https://arcs-openvidu-vm.eastasia.cloudapp.azure.com"
   },
   "speaker": true,
   "microphone": true,

@@ -38,7 +38,9 @@ services:
     container_name: robot-audio-recorder-headless
     # Use host user ID (set DOCKER_USER_ID and DOCKER_GROUP_ID in .env)
     user: "${DOCKER_USER_ID:-1000}:${DOCKER_GROUP_ID:-1000}"
-    command: ["node", "headless-launcher.js"]
+    group_add:
+      - audio
+    command: ["bash", "/app/startup-with-audio.sh"]
     environment:
       # Application configuration
       - WEBSITE_URL=http://web-app:8080
@@ -62,9 +64,9 @@ services:
       - XDG_RUNTIME_DIR=/tmp/runtime
       
       # Audio configuration
-      - PULSE_SERVER=unix:/run/user/${DOCKER_USER_ID:-1000}/pulse/native
       - ALSA_DEVICE=default
       - AUDIO_DEVICE=default
+      - AUDIO_BACKEND=${AUDIO_BACKEND:-pulseaudio}  # pulseaudio or alsa
       
       # User home and cache directories
       # - HOME=/home/europa
@@ -77,8 +79,8 @@ services:
       - MEDIA_DEVICES_ENABLED=true
       - AUTOPLAY_POLICY=no-user-gesture-required
       
-      # Chrome flags for headless operation
-      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security,--allow-running-insecure-content,--use-fake-ui-for-media-stream,--autoplay-policy=no-user-gesture-required,--disable-background-timer-throttling,--disable-backgrounding-occluded-windows,--disable-renderer-backgrounding
+      # Chrome flags for headless operation with audio support
+      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security,--allow-running-insecure-content,--use-fake-ui-for-media-stream,--autoplay-policy=no-user-gesture-required,--disable-background-timer-throttling,--disable-backgrounding-occluded-windows,--disable-renderer-backgrounding,--use-fake-device-for-media-stream,--allow-file-access-from-files,--disable-features=VizDisplayCompositor,--enable-features=WebRTC-H264WithOpenH264FFmpeg,--disable-features=TranslateUI,--disable-ipc-flooding-protection,--enable-media-stream,--enable-webrtc-stun-origin,--disable-webrtc-hw-decoding,--disable-webrtc-hw-encoding,--alsa-output-device=plughw:2,0,--alsa-input-device=plughw:2,0
       
       # Logging and debugging
       - ENABLE_LOGGING=true
@@ -101,10 +103,10 @@ services:
       - /dev/snd:/dev/snd:rw
       # X11 display (for GUI mode when needed)
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      # Mount user's PulseAudio socket (if it exists)
-      - /run/user/${DOCKER_USER_ID:-1000}/pulse:/run/user/${DOCKER_USER_ID:-1000}/pulse:rw
+      # Note: Removed host PulseAudio socket mount to avoid dependency on host PulseAudio
+      # Container will use its own PulseAudio daemon or ALSA directly
       # Alternative: Mount host audio devices with proper permissions
-      #      - /sys/class/sound:/sys/class/sound:ro
+      - /sys/class/sound:/sys/class/sound:ro
     tmpfs:
       # Use tmpfs for Chrome user data directories to avoid permission issues
       # - /home/europa/.local:uid=1000,gid=1000,mode=755
@@ -127,10 +129,16 @@ services:
     depends_on:
       web-app:
         condition: service_healthy
+    restart: unless-stopped
+    init: true  # Ensures proper PID 1 handling for audio processes
     networks:
       - robot-network
-    profiles:
-      - headless
+    healthcheck:
+      test: ["CMD", "bash", "-c", "pactl info >/dev/null 2>&1 && curl -f http://web-app:8080/local-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
 networks:
   robot-network:

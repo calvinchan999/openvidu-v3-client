@@ -9,7 +9,14 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    curl
+    curl \
+    bash \
+    pulseaudio \
+    pulseaudio-utils \
+    alsa-utils \
+    nano \
+    dbus \
+    dbus-x11
 
 # Set environment variables
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
@@ -29,12 +36,99 @@ RUN npm install --only=production --no-audit --no-fund --silent \
 # Copy application files
 COPY . .
 
+# Make all scripts executable
+RUN chmod +x /app/startup-with-audio.sh /app/test-audio-alsa.sh /app/test-audio.sh
+
 # Create logs directory
 RUN mkdir -p /app/logs
 
-# Create non-root user
+# Create PulseAudio configuration directory
+RUN mkdir -p /etc/pulse
+
+# Create PulseAudio client configuration
+RUN echo "default-server = unix:/tmp/pulse-socket" > /etc/pulse/client.conf && \
+    echo "autospawn = no" >> /etc/pulse/client.conf && \
+    echo "daemon-binary = /usr/bin/pulseaudio" >> /etc/pulse/client.conf && \
+    echo "extra-arguments = --log-target=syslog" >> /etc/pulse/client.conf
+
+# Create PulseAudio daemon configuration
+RUN echo "load-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-socket" > /etc/pulse/daemon.conf && \
+    echo "load-module module-alsa-sink device=default" >> /etc/pulse/daemon.conf && \
+    echo "load-module module-alsa-source device=default" >> /etc/pulse/daemon.conf && \
+    echo "load-module module-suspend-on-idle" >> /etc/pulse/daemon.conf && \
+    echo "load-module module-device-restore" >> /etc/pulse/daemon.conf && \
+    echo "load-module module-stream-restore" >> /etc/pulse/daemon.conf && \
+    echo "load-module module-card-restore" >> /etc/pulse/daemon.conf && \
+    echo "load-module module-augment-properties" >> /etc/pulse/daemon.conf && \
+    echo "load-module module-switch-on-port-available" >> /etc/pulse/daemon.conf
+
+# Create simple audio test script
+RUN echo '#!/bin/bash' > /app/test-audio-simple.sh && \
+    echo 'echo "Testing ALSA audio directly..."' >> /app/test-audio-simple.sh && \
+    echo 'aplay -l' >> /app/test-audio-simple.sh && \
+    echo 'echo "Testing QCC5125 device..."' >> /app/test-audio-simple.sh && \
+    echo 'aplay -D plughw:2,0 /usr/share/sounds/alsa/Noise.wav' >> /app/test-audio-simple.sh && \
+    chmod +x /app/test-audio-simple.sh
+
+# Create enhanced startup script for PulseAudio
+RUN echo '#!/bin/bash' > /app/start-pulseaudio.sh && \
+    echo 'echo "🎵 Starting PulseAudio daemon..."' >> /app/start-pulseaudio.sh && \
+    echo '' >> /app/start-pulseaudio.sh && \
+    echo '# Kill any existing PulseAudio processes' >> /app/start-pulseaudio.sh && \
+    echo 'pkill -f pulseaudio 2>/dev/null || true' >> /app/start-pulseaudio.sh && \
+    echo 'sleep 3' >> /app/start-pulseaudio.sh && \
+    echo '' >> /app/start-pulseaudio.sh && \
+    echo '# Clean up old sockets and temp files' >> /app/start-pulseaudio.sh && \
+    echo 'rm -f /tmp/pulse-socket /tmp/pulse-*' >> /app/start-pulseaudio.sh && \
+    echo 'rm -rf /tmp/.pulse-* ~/.pulse* ~/.config/pulse' >> /app/start-pulseaudio.sh && \
+    echo '' >> /app/start-pulseaudio.sh && \
+    echo '# Create runtime directories' >> /app/start-pulseaudio.sh && \
+    echo 'mkdir -p /tmp/pulse /app/.config/pulse /app/.pulse' >> /app/start-pulseaudio.sh && \
+    echo '' >> /app/start-pulseaudio.sh && \
+    echo '# Set environment variables' >> /app/start-pulseaudio.sh && \
+    echo 'export PULSE_SERVER="unix:/tmp/pulse-socket"' >> /app/start-pulseaudio.sh && \
+    echo 'export PULSE_RUNTIME_PATH="/tmp/pulse"' >> /app/start-pulseaudio.sh && \
+    echo '' >> /app/start-pulseaudio.sh && \
+    echo '# Start PulseAudio daemon with more robust settings' >> /app/start-pulseaudio.sh && \
+    echo 'pulseaudio --kill 2>/dev/null || true' >> /app/start-pulseaudio.sh && \
+    echo 'sleep 2' >> /app/start-pulseaudio.sh && \
+    echo '' >> /app/start-pulseaudio.sh && \
+    echo 'pulseaudio --system=false --daemonize=false --log-target=stderr --log-level=info --high-priority --realtime --disallow-module-loading=false --disallow-exit=false --exit-idle-time=-1 --flat-volumes=false --start > /tmp/pulseaudio.log 2>&1 &' >> /app/start-pulseaudio.sh && \
+    echo 'PULSE_PID=$!' >> /app/start-pulseaudio.sh && \
+    echo 'echo "PulseAudio started with PID: $PULSE_PID"' >> /app/start-pulseaudio.sh && \
+    echo '' >> /app/start-pulseaudio.sh && \
+    echo '# Wait for PulseAudio to be ready' >> /app/start-pulseaudio.sh && \
+    echo 'for i in {1..30}; do' >> /app/start-pulseaudio.sh && \
+    echo '    if pactl info >/dev/null 2>&1; then' >> /app/start-pulseaudio.sh && \
+    echo '        echo "✅ PulseAudio is ready (attempt $i)"' >> /app/start-pulseaudio.sh && \
+    echo '        break' >> /app/start-pulseaudio.sh && \
+    echo '    fi' >> /app/start-pulseaudio.sh && \
+    echo '    echo "⏳ Waiting for PulseAudio to start... ($i/30)"' >> /app/start-pulseaudio.sh && \
+    echo '    sleep 1' >> /app/start-pulseaudio.sh && \
+    echo 'done' >> /app/start-pulseaudio.sh && \
+    echo '' >> /app/start-pulseaudio.sh && \
+    echo '# Test PulseAudio functionality' >> /app/start-pulseaudio.sh && \
+    echo 'if pactl info >/dev/null 2>&1; then' >> /app/start-pulseaudio.sh && \
+    echo '    echo "✅ PulseAudio daemon is running successfully"' >> /app/start-pulseaudio.sh && \
+    echo '    echo "Server info:"' >> /app/start-pulseaudio.sh && \
+    echo '    pactl info' >> /app/start-pulseaudio.sh && \
+    echo '    echo "Available sinks:"' >> /app/start-pulseaudio.sh && \
+    echo '    pactl list short sinks' >> /app/start-pulseaudio.sh && \
+    echo '    echo "Available sources:"' >> /app/start-pulseaudio.sh && \
+    echo '    pactl list short sources' >> /app/start-pulseaudio.sh && \
+    echo 'else' >> /app/start-pulseaudio.sh && \
+    echo '    echo "❌ PulseAudio failed to start properly"' >> /app/start-pulseaudio.sh && \
+    echo '    echo "Log contents:"' >> /app/start-pulseaudio.sh && \
+    echo '    cat /tmp/pulseaudio.log' >> /app/start-pulseaudio.sh && \
+    echo '    exit 1' >> /app/start-pulseaudio.sh && \
+    echo 'fi' >> /app/start-pulseaudio.sh && \
+    chmod +x /app/start-pulseaudio.sh
+
+# Create non-root user with audio group
 RUN addgroup -g 1001 -S nodejs \
-    && adduser -S nodejs -u 1001
+    && adduser -S nodejs -u 1001 \
+    && (addgroup -g 29 -S audio 2>/dev/null || true) \
+    && adduser nodejs audio
 
 # Change ownership
 RUN chown -R nodejs:nodejs /app
