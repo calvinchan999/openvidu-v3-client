@@ -34,44 +34,29 @@ const puppeteer = require("puppeteer");
     // Get Chrome arguments from environment or use defaults
     const chromeArgs = process.env.CHROME_ARGS ? 
       process.env.CHROME_ARGS.split(',') : [
-        "--use-fake-ui-for-media-stream",
         "--no-sandbox",
-        "--disable-gpu",
-        "--disable-dev-shm-usage",
         "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
         "--disable-web-security",
-        "--allow-running-insecure-content",
-        "--unsafely-treat-insecure-origin-as-secure",
-        "--autoplay-policy=no-user-gesture-required",
-        "--hide-scrollbars",
-        "--incognito",
-        // WebRTC specific flags for OpenVidu v3
-        "--enable-features=WebRTC",
-        "--allow-loopback-in-peer-connection",
-        "--enable-audio-service-sandbox=false",
-        "--disable-audio-sandbox",
-        // Audio device access flags
-        "--use-fake-device-for-media-stream",
-        "--allow-file-access-from-files",
         "--disable-features=VizDisplayCompositor",
-        "--enable-features=WebRTC-H264WithOpenH264FFmpeg",
+        "--use-fake-ui-for-media-stream",
+        "--autoplay-policy=no-user-gesture-required",
+        "--allow-running-insecure-content",
         "--disable-background-timer-throttling",
         "--disable-backgrounding-occluded-windows",
         "--disable-renderer-backgrounding",
         "--disable-features=TranslateUI",
         "--disable-ipc-flooding-protection",
-        // Audio permissions
         "--enable-media-stream",
-        "--enable-webrtc-stun-origin",
-        "--disable-webrtc-hw-decoding",
-        "--disable-webrtc-hw-encoding"
+        "--single-process"
       ];
     
     // Launch the browser and open a new blank page
     const browser = await puppeteer.launch({
       headless: true,
-      executablePath: process.env.CHROME_BIN || "/usr/bin/google-chrome-stable",
-      ignoreDefaultArgs: ['--mute-audio'],
+      executablePath: process.env.CHROME_BIN || "/usr/bin/chromium-browser",
+      ignoreDefaultArgs: ['--enable-automation', '--enable-blink-features=IdleDetection'],
       args: chromeArgs
     });
 
