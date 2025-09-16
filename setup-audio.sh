@@ -58,6 +58,15 @@ if [ "$BUILD_MODE" = "false" ]; then
         log "📊 Available ALSA devices:"
         ls -la /dev/snd/ 2>/dev/null || log "❌ Cannot list /dev/snd contents"
         
+        # Check for /proc/asound (may not be available in container)
+        if [ -d "/proc/asound" ]; then
+            log "✅ /proc/asound available"
+            ls -la /proc/asound/ 2>/dev/null | head -5 || true
+        else
+            log "⚠️ /proc/asound not available (container limitation)"
+            log "💡 Will use /dev/snd devices directly"
+        fi
+        
         # Check device permissions
         if [ -c "/dev/snd/controlC0" ]; then
             log "✅ Found audio control device: /dev/snd/controlC0"

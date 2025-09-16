@@ -1,9 +1,10 @@
 services:
   # Web Application Server (Proxy + Static Files)
   web-app:
-    build:
-      context: .
-      dockerfile: Dockerfile.web  # Use minimal Dockerfile (no Chrome needed)
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.web  # Use minimal Dockerfile (no Chrome needed)
+    image: devarcscontainerregistry.azurecr.io/openvidu-client-web:v0.0.1
     container_name: robot-audio-recorder-web
     command: ["node", "simple-proxy.js"]
     environment:
@@ -32,9 +33,10 @@ services:
 
   # Headless Browser (connects to web-app) - Use Alpine for size optimization
   headless-browser:
-    build:
-      context: .
-      dockerfile: Dockerfile.alpine  # Use Alpine ONLY for headless browser
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.alpine  # Use Alpine ONLY for headless browser
+    image: devarcscontainerregistry.azurecr.io/openvidu-client-browser:v0.0.1
     container_name: robot-audio-recorder-headless
     # Use host user ID (set DOCKER_USER_ID and DOCKER_GROUP_ID in .env)
     user: "${DOCKER_USER_ID:-1000}:${DOCKER_GROUP_ID:-1000}"
@@ -92,7 +94,6 @@ services:
       - ./.env:/app/.env:ro
       # Audio device access for Ubuntu 18
       - /dev/snd:/dev/snd:rw
-      - /proc/asound:/proc/asound:ro
       - /sys/class/sound:/sys/class/sound:ro
       # PulseAudio socket (if available)
       - /run/user/1000/pulse:/run/user/1000/pulse:ro
@@ -106,6 +107,7 @@ services:
     cap_add:
       - SYS_ADMIN
       - SYS_NICE  # For audio priority
+    privileged: false  # Keep security, but enable proc access
     devices:
       - /dev/snd:/dev/snd  # Audio devices
     depends_on:
