@@ -14,9 +14,10 @@ RUN apk add --no-cache \
     pulseaudio \
     pulseaudio-utils \
     alsa-utils \
+    alsa-lib \
+    alsa-lib-dev \
     dbus \
-    su-exec \ 
-    nano
+    su-exec
 
 # Set environment variables
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
@@ -39,9 +40,19 @@ COPY . .
 RUN mkdir -p /app/logs /etc/pulse /tmp/pulse && \
     chmod +x /app/*.sh 2>/dev/null || true
 
-# Create minimal PulseAudio configuration
+# Create minimal PulseAudio configuration for Ubuntu 18 compatibility
 RUN echo "default-server = unix:/tmp/pulse-socket" > /etc/pulse/client.conf && \
-    echo "autospawn = no" >> /etc/pulse/client.conf
+    echo "autospawn = no" >> /etc/pulse/client.conf && \
+    echo "daemon-binary = /usr/bin/pulseaudio" >> /etc/pulse/client.conf && \
+    echo "extra-arguments = --log-target=syslog" >> /etc/pulse/client.conf
+
+# Create ALSA configuration for better device access
+RUN echo "pcm.!default { type pulse server unix:/tmp/pulse-socket }" > /etc/asound.conf && \
+    echo "ctl.!default { type pulse server unix:/tmp/pulse-socket }" >> /etc/asound.conf
+
+# Copy and set up the audio setup script
+COPY setup-audio.sh /app/setup-audio.sh
+RUN chmod +x /app/setup-audio.sh
 
 # Create audio group and user
 RUN addgroup -g 1001 -S nodejs && \
@@ -60,5 +71,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8080/local-health || exit 1
 
-# Default command
-CMD ["node", "headless-launcher.js"]
+# Default command with audio setup
+CMD ["/app/setup-audio.sh", "node", "headless-launcher.js"]
