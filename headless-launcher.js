@@ -63,7 +63,7 @@ const puppeteer = require("puppeteer");
         console.log(`🚀 Attempting to launch browser (attempt ${retryCount + 1}/${maxRetries})...`);
         
         browser = await puppeteer.launch({
-          headless: true,
+          headless: true,  // Use stable headless mode
           executablePath: process.env.CHROME_BIN || "/usr/bin/chromium-browser",
           ignoreDefaultArgs: ['--enable-automation', '--enable-blink-features=IdleDetection'],
           args: chromeArgs,
@@ -71,7 +71,8 @@ const puppeteer = require("puppeteer");
           handleSIGTERM: false,
           handleSIGHUP: false,
           timeout: 30000,
-          protocolTimeout: 10000
+          protocolTimeout: 10000,
+          defaultViewport: { width: 1280, height: 720 }
         });
         
         console.log("✅ Browser launched successfully!");
@@ -91,7 +92,9 @@ const puppeteer = require("puppeteer");
       }
     }
 
-    const [page] = await browser.pages();
+    // Get the default page or create a new one
+    const pages = await browser.pages();
+    const page = pages.length > 0 ? pages[0] : await browser.newPage();
     
     // Enhanced console logging with filtering based on environment
     const logLevel = process.env.LOG_LEVEL || 'info';

@@ -71,8 +71,8 @@ services:
       - MEDIA_DEVICES_ENABLED=true
       - AUTOPLAY_POLICY=no-user-gesture-required
       
-      # Basic Chrome flags (optimized for Ubuntu 18 direct ALSA access)
-      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--use-fake-ui-for-media-stream,--use-fake-device-for-media-stream,--autoplay-policy=no-user-gesture-required,--disable-features=VizDisplayCompositor,--disable-background-timer-throttling,--allow-running-insecure-content,--alsa-output-device=hw:0,0,--alsa-input-device=hw:0,0,--enable-audio-service-sandbox=false,--disable-audio-output
+      # Minimal Chrome flags for stable headless operation
+      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security,--use-fake-ui-for-media-stream,--use-fake-device-for-media-stream,--autoplay-policy=no-user-gesture-required
       
       # Logging and debugging
       - ENABLE_LOGGING=true
