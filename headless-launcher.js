@@ -37,8 +37,16 @@ const puppeteer = require("puppeteer");
         "--no-sandbox",
         "--disable-dev-shm-usage",
         "--disable-setuid-sandbox",
+        "--disable-web-security",
+        "--disable-features=VizDisplayCompositor",
         "--use-fake-ui-for-media-stream",
-        "--autoplay-policy=no-user-gesture-required"
+        "--use-fake-device-for-media-stream",
+        "--autoplay-policy=no-user-gesture-required",
+        "--allow-running-insecure-content",
+        "--disable-background-timer-throttling",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-renderer-backgrounding",
+        "--disable-extensions"
       ];
     
     // Launch the browser with retry logic
@@ -53,7 +61,6 @@ const puppeteer = require("puppeteer");
         browser = await puppeteer.launch({
           headless: "new",  // Use new headless mode for better compatibility
           executablePath: process.env.CHROME_BIN || "/usr/bin/google-chrome-stable",
-          ignoreDefaultArgs: ['--mute-audio', '--disable-extensions'],  // Minimal ignores
           args: chromeArgs,
           handleSIGINT: false,
           handleSIGTERM: false,
