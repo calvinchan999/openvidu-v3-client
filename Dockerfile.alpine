@@ -25,6 +25,8 @@ RUN apk add --no-cache \
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ENV CHROME_BIN=/usr/bin/chromium-browser
+ENV GOOGLE_CHROME_BIN=/usr/bin/chromium-browser
+ENV CHROMIUM_BIN=/usr/bin/chromium-browser
 ENV NODE_ENV=production
 ENV ALSA_DEVICE=plughw:1,0
 ENV AUDIO_DEVICE=plughw:1,0
@@ -41,6 +43,19 @@ COPY package.json ./
 # Install dependencies with npm install (more compatible than npm ci)
 RUN npm install --only=production --no-audit --no-fund --silent \
     && npm cache clean --force
+
+# Create Chrome/Chromium compatibility symlinks
+RUN ln -sf /usr/bin/chromium-browser /usr/bin/google-chrome \
+    && ln -sf /usr/bin/chromium-browser /usr/bin/chrome \
+    && ln -sf /usr/bin/chromium-browser /usr/local/bin/google-chrome \
+    && ln -sf /usr/bin/chromium-browser /usr/local/bin/chrome
+
+# Verify browser installation
+RUN echo "🔍 Verifying browser installation..." \
+    && ls -la /usr/bin/chromium* || echo "No chromium files found" \
+    && ls -la /usr/bin/google-chrome* || echo "No google-chrome files found" \
+    && /usr/bin/chromium-browser --version || echo "Chromium version check failed" \
+    && which chromium-browser || echo "chromium-browser not in PATH"
 
 # Copy application files
 COPY . .

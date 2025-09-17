@@ -33,10 +33,13 @@ services:
 
   # Headless Browser (connects to web-app) - Use Alpine for size optimization
   headless-browser:
+    # For local build, uncomment the build section:
     # build:
     #   context: .
-    #   dockerfile: Dockerfile.alpine  # Use Alpine ONLY for headless browser
-    image: devarcscontainerregistry.azurecr.io/openvidu-client-browser:v0.0.1
+    #   dockerfile: Dockerfile.alpine  # Use Alpine for headless browser
+    
+    # For registry/pulled image, use this:
+    image: robot-audio-recorder:latest  # Change this to your registry URL if pushing to registry
     container_name: robot-audio-recorder-headless
     # Start as root to set up audio permissions, then switch to target user
     # user: "${DOCKER_USER_ID:-1000}:${DOCKER_GROUP_ID:-1000}"
@@ -56,20 +59,23 @@ services:
       - PARTICIPANT_NAME_SUFFIX_LENGTH=8
       - PARTICIPANT_NAME_GENERATION=timestamp
       
-      # Chrome/Puppeteer configuration - using Google Chrome
-      - CHROME_BIN=/usr/bin/google-chrome-stable
-      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+      # Chrome/Puppeteer configuration - using Chromium browser
+      - CHROME_BIN=/usr/bin/chromium-browser
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
       
       # User switching for audio setup
       - DOCKER_USER_ID=${DOCKER_USER_ID:-1000}
       - DOCKER_GROUP_ID=${DOCKER_GROUP_ID:-1000}
       
-      # Audio configuration for Ubuntu 18 - USB Audio Device (card 1)
-      - ALSA_DEVICE=hw:1,0
-      - AUDIO_DEVICE=hw:1,0
+      # Audio configuration - using proven working C-Media USB Audio Device
+      - ALSA_DEVICE=plughw:1,0
+      - AUDIO_DEVICE=plughw:1,0
+      - PULSE_DEVICE=plughw:1,0
       - ALSA_PCM_CARD=1
       - ALSA_PCM_DEVICE=0
+      # Fallback QCC5125 configuration
+      - QCC5125_DEVICE=hw:2,0
       
       # WebRTC and media configuration
       - WEBRTC_ENABLED=true
