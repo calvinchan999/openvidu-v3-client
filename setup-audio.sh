@@ -288,6 +288,40 @@ if [ "$BUILD_MODE" = "true" ]; then
     log "📦 Build mode - audio will be configured at runtime"
 else
     log "🎵 Runtime mode - audio configuration active"
+    
+    # Start PulseAudio daemon if not in build mode
+    log "🎵 Starting PulseAudio daemon in background..."
+    
+    # Kill any existing PulseAudio processes
+    pkill -f pulseaudio 2>/dev/null || true
+    sleep 2
+    
+    # Clean up old sockets and temp files
+    rm -f /tmp/pulse-socket /tmp/pulse-*
+    rm -rf /tmp/.pulse-* ~/.pulse* ~/.config/pulse 2>/dev/null || true
+    
+    # Create runtime directories
+    mkdir -p /tmp/pulse /app/.config/pulse /app/.pulse 2>/dev/null || true
+    
+    # Set environment variables
+    export PULSE_SERVER="unix:/tmp/pulse-socket"
+    export PULSE_RUNTIME_PATH="/tmp/pulse"
+    
+    # Start PulseAudio daemon in background (non-blocking)
+    pulseaudio --system=false --daemonize=true --high-priority --realtime --disallow-module-loading=false --disallow-exit=false --file=/etc/pulse/default.pa --log-target=syslog --log-level=info > /tmp/pulseaudio.log 2>&1 &
+    PULSE_PID=$!
+    log "🎵 PulseAudio started in background with PID: $PULSE_PID"
+    
+    # Give PulseAudio a moment to initialize
+    sleep 3
+    
+    # Test if PulseAudio is responding
+    if pactl info >/dev/null 2>&1; then
+        log "✅ PulseAudio daemon is running and accessible"
+    else
+        log "⚠️ PulseAudio may not be fully ready yet (this is normal)"
+        log "📝 Check 'docker exec -it robot-audio-recorder-headless pactl list' after container starts"
+    fi
 fi
 
 log "🚀 Starting application with arguments: $@"

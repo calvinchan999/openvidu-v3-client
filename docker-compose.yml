@@ -43,7 +43,7 @@ services:
     group_add:
       - "29"  # Host audio group ID
       - "audio"  # Also add audio group by name
-    command: ["/app/setup-audio.sh", "/app/start-pulseaudio.sh", "node", "headless-launcher.js"]
+    command: ["/app/setup-audio.sh", "node", "headless-launcher.js"]
     environment:
       # Application configuration
       - WEBSITE_URL=http://web-app:8080
