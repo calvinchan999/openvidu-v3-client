@@ -76,8 +76,8 @@ services:
       - MEDIA_DEVICES_ENABLED=true
       - AUTOPLAY_POLICY=no-user-gesture-required
       
-      # Chrome flags for headless mode compatibility - minimal and clean with single-process
-      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-setuid-sandbox,--use-fake-ui-for-media-stream,--autoplay-policy=no-user-gesture-required,--single-process,--no-zygote,--alsa-output-device=hw:1,0,--alsa-input-device=hw:1,0
+      # Chrome flags for new headless mode - minimal for compatibility
+      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-setuid-sandbox,--use-fake-ui-for-media-stream,--autoplay-policy=no-user-gesture-required,--alsa-output-device=hw:1,0,--alsa-input-device=hw:1,0
       
       # Logging and debugging
       - ENABLE_LOGGING=true

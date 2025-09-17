@@ -36,12 +36,9 @@ const puppeteer = require("puppeteer");
       process.env.CHROME_ARGS.split(',') : [
         "--no-sandbox",
         "--disable-dev-shm-usage",
-        "--disable-gpu",
         "--disable-setuid-sandbox",
         "--use-fake-ui-for-media-stream",
-        "--autoplay-policy=no-user-gesture-required",
-        "--single-process",
-        "--no-zygote"
+        "--autoplay-policy=no-user-gesture-required"
       ];
     
     // Launch the browser with retry logic
@@ -54,9 +51,9 @@ const puppeteer = require("puppeteer");
         console.log(`🚀 Attempting to launch browser (attempt ${retryCount + 1}/${maxRetries})...`);
         
         browser = await puppeteer.launch({
-          headless: true,  // Use stable headless mode like v2
+          headless: "new",  // Use new headless mode for better compatibility
           executablePath: process.env.CHROME_BIN || "/usr/bin/google-chrome-stable",
-          ignoreDefaultArgs: ['--mute-audio'],  // Same as v2 config
+          ignoreDefaultArgs: ['--mute-audio', '--disable-extensions'],  // Minimal ignores
           args: chromeArgs,
           handleSIGINT: false,
           handleSIGTERM: false,
