@@ -31,26 +31,20 @@ const puppeteer = require("puppeteer");
     console.log(`   - TARGET_SERVER: ${process.env.TARGET_SERVER}`);
     console.log(`   - NODE_ENV: ${process.env.NODE_ENV}`);
     
-    // Get Chrome arguments from environment or use defaults
+    // Get Chrome arguments from environment or use OpenVidu v2 proven config
     const chromeArgs = process.env.CHROME_ARGS ? 
       process.env.CHROME_ARGS.split(',') : [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-web-security",
-        "--disable-features=VizDisplayCompositor",
         "--use-fake-ui-for-media-stream",
-        "--autoplay-policy=no-user-gesture-required",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--disable-setuid-sandbox",
+        "--disable-web-security",
         "--allow-running-insecure-content",
-        "--disable-background-timer-throttling",
-        "--disable-backgrounding-occluded-windows",
-        "--disable-renderer-backgrounding",
-        "--disable-features=TranslateUI",
-        "--disable-ipc-flooding-protection",
-        "--enable-media-stream",
-        "--disable-extensions",
-        "--disable-plugins"
+        "--unsafely-treat-insecure-origin-as-secure",
+        "--autoplay-policy=no-user-gesture-required",
+        "--hide-scrollbars",
+        "--incognito"
       ];
     
     // Launch the browser with retry logic
@@ -63,16 +57,15 @@ const puppeteer = require("puppeteer");
         console.log(`🚀 Attempting to launch browser (attempt ${retryCount + 1}/${maxRetries})...`);
         
         browser = await puppeteer.launch({
-          headless: true,  // Use stable headless mode
+          headless: true,  // Use stable headless mode like v2
           executablePath: process.env.CHROME_BIN || "/usr/bin/chromium-browser",
-          ignoreDefaultArgs: ['--enable-automation', '--enable-blink-features=IdleDetection'],
+          ignoreDefaultArgs: ['--mute-audio'],  // Same as v2 config
           args: chromeArgs,
           handleSIGINT: false,
           handleSIGTERM: false,
           handleSIGHUP: false,
           timeout: 30000,
-          protocolTimeout: 10000,
-          defaultViewport: { width: 1280, height: 720 }
+          protocolTimeout: 10000
         });
         
         console.log("✅ Browser launched successfully!");
@@ -92,9 +85,8 @@ const puppeteer = require("puppeteer");
       }
     }
 
-    // Get the default page or create a new one
-    const pages = await browser.pages();
-    const page = pages.length > 0 ? pages[0] : await browser.newPage();
+    // Get the default page like v2 config
+    const [page] = await browser.pages();
     
     // Enhanced console logging with filtering based on environment
     const logLevel = process.env.LOG_LEVEL || 'info';

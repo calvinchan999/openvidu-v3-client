@@ -55,15 +55,15 @@ services:
       - PARTICIPANT_NAME_SUFFIX_LENGTH=8
       - PARTICIPANT_NAME_GENERATION=timestamp
       
-      # Chrome/Puppeteer configuration
+      # Chrome/Puppeteer configuration - using Chromium in Alpine
       - CHROME_BIN=/usr/bin/chromium-browser
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
       
-      # Audio configuration for Ubuntu 18 - Direct ALSA access
-      - ALSA_DEVICE=hw:0,0
-      - AUDIO_DEVICE=hw:0,0
-      - ALSA_PCM_CARD=0
+      # Audio configuration for Ubuntu 18 - Direct ALSA access to USB Audio Device
+      - ALSA_DEVICE=hw:1,0
+      - AUDIO_DEVICE=hw:1,0
+      - ALSA_PCM_CARD=1
       - ALSA_PCM_DEVICE=0
       
       # WebRTC and media configuration
@@ -71,8 +71,8 @@ services:
       - MEDIA_DEVICES_ENABLED=true
       - AUTOPLAY_POLICY=no-user-gesture-required
       
-      # Minimal Chrome flags for stable headless operation
-      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-web-security,--use-fake-ui-for-media-stream,--use-fake-device-for-media-stream,--autoplay-policy=no-user-gesture-required
+      # Chrome flags matching successful OpenVidu v2 config
+      - CHROME_ARGS=--use-fake-ui-for-media-stream,--no-sandbox,--disable-gpu,--disable-dev-shm-usage,--disable-setuid-sandbox,--disable-web-security,--allow-running-insecure-content,--unsafely-treat-insecure-origin-as-secure,--autoplay-policy=no-user-gesture-required,--hide-scrollbars,--incognito
       
       # Logging and debugging
       - ENABLE_LOGGING=true

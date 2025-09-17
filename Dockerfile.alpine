@@ -45,18 +45,18 @@ RUN echo "# PulseAudio client config - fallback only" > /etc/pulse/client.conf &
     echo "autospawn = no" >> /etc/pulse/client.conf && \
     echo "daemon-binary = /bin/false" >> /etc/pulse/client.conf
 
-# Create ALSA configuration for direct hardware access (no PulseAudio dependency)
-RUN echo "# ALSA configuration for direct hardware access" > /etc/asound.conf && \
+# Create ALSA configuration for USB Audio Device access
+RUN echo "# ALSA configuration for USB Audio Device (card 1)" > /etc/asound.conf && \
     echo "pcm.!default {" >> /etc/asound.conf && \
     echo "    type hw" >> /etc/asound.conf && \
-    echo "    card 0" >> /etc/asound.conf && \
+    echo "    card 1" >> /etc/asound.conf && \
     echo "    device 0" >> /etc/asound.conf && \
     echo "}" >> /etc/asound.conf && \
     echo "ctl.!default {" >> /etc/asound.conf && \
     echo "    type hw" >> /etc/asound.conf && \
-    echo "    card 0" >> /etc/asound.conf && \
+    echo "    card 1" >> /etc/asound.conf && \
     echo "}" >> /etc/asound.conf && \
-    echo "# Alternative PCM devices" >> /etc/asound.conf && \
+    echo "# Fallback PCM devices" >> /etc/asound.conf && \
     echo "pcm.hw0 { type hw; card 0; device 0; }" >> /etc/asound.conf && \
     echo "pcm.hw1 { type hw; card 1; device 0; }" >> /etc/asound.conf && \
     echo "pcm.hw2 { type hw; card 2; device 0; }" >> /etc/asound.conf
