@@ -1,0 +1,313 @@
+# Test Dockerfile for Audio Testing
+# This is a lightweight container specifically for testing audio functionality
+FROM node:18-alpine AS test
+
+# Install essential packages for audio testing
+RUN apk add --no-cache \
+    bash \
+    curl \
+    alsa-utils \
+    alsa-lib \
+    alsa-lib-dev \
+    pulseaudio \
+    pulseaudio-utils \
+    nano \
+    dbus \
+    dbus-x11 \
+    sox \
+    ffmpeg \
+    ca-certificates
+
+# Set environment variables for audio testing
+ENV NODE_ENV=test
+ENV ALSA_DEVICE=hw:2,0
+ENV AUDIO_DEVICE=hw:2,0
+ENV QCC5125_DEVICE=hw:2,0
+
+# Create app directory
+WORKDIR /app
+
+# Copy only essential files for testing
+COPY package.json ./
+COPY setup-audio.sh ./
+COPY test-audio-*.sh ./
+COPY simple-startup.sh ./
+COPY fix-audio-after-reboot.sh ./
+
+# Install minimal dependencies for testing
+RUN npm install --only=production --no-audit --no-fund --silent \
+    && npm cache clean --force
+
+# Create comprehensive audio test suite
+RUN echo '#!/bin/bash' > /app/comprehensive-audio-test.sh && \
+    echo 'echo "🎵 === COMPREHENSIVE AUDIO TEST SUITE ==="' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "Date: $(date)"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "Host: $(hostname)"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo '' >> /app/comprehensive-audio-test.sh && \
+    echo '# 1. System Information' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "📋 === SYSTEM INFORMATION ==="' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "OS: $(uname -a)"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "User: $(whoami) ($(id))"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "Groups: $(groups)"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo '' >> /app/comprehensive-audio-test.sh && \
+    echo '# 2. Docker Audio Setup Check' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "🐳 === DOCKER AUDIO SETUP CHECK ==="' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "Checking if audio devices are properly mounted..."' >> /app/comprehensive-audio-test.sh && \
+    echo 'if [ ! -d "/dev/snd" ]; then' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "❌ /dev/snd directory not found!"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "💡 SOLUTION: Run container with --device=/dev/snd:/dev/snd"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "   Example: docker run --device=/dev/snd:/dev/snd -it your-image"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo' >> /app/comprehensive-audio-test.sh && \
+    echo 'elif [ -z "$(ls -A /dev/snd 2>/dev/null)" ]; then' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "❌ /dev/snd directory is empty!"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "💡 SOLUTION: Ensure host has audio devices and they are mounted properly"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "   Check host: ls -la /dev/snd"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo' >> /app/comprehensive-audio-test.sh && \
+    echo 'else' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "✅ /dev/snd directory exists and contains devices"' >> /app/comprehensive-audio-test.sh && \
+    echo 'fi' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo '' >> /app/comprehensive-audio-test.sh && \
+    echo '# 3. Audio Device Detection' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "🔍 === AUDIO DEVICE DETECTION ==="' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "Audio devices in /dev/snd:"' >> /app/comprehensive-audio-test.sh && \
+    echo 'if [ -d "/dev/snd" ]; then' >> /app/comprehensive-audio-test.sh && \
+    echo '    ls -la /dev/snd/ 2>/dev/null || echo "❌ Cannot list /dev/snd contents"' >> /app/comprehensive-audio-test.sh && \
+    echo 'else' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "❌ /dev/snd directory not found"' >> /app/comprehensive-audio-test.sh && \
+    echo 'fi' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "ALSA cards info:"' >> /app/comprehensive-audio-test.sh && \
+    echo 'if [ -f "/proc/asound/cards" ]; then' >> /app/comprehensive-audio-test.sh && \
+    echo '    cat /proc/asound/cards 2>/dev/null || echo "❌ Cannot read ALSA cards info"' >> /app/comprehensive-audio-test.sh && \
+    echo 'else' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "❌ /proc/asound/cards not available (may need --privileged or host audio setup)"' >> /app/comprehensive-audio-test.sh && \
+    echo 'fi' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo '' >> /app/comprehensive-audio-test.sh && \
+    echo '# 4. ALSA Tests with better error handling' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "🎵 === ALSA FUNCTIONALITY TESTS ==="' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "ALSA playback devices:"' >> /app/comprehensive-audio-test.sh && \
+    echo 'APLAY_OUTPUT=$(aplay -l 2>&1)' >> /app/comprehensive-audio-test.sh && \
+    echo 'if echo "$APLAY_OUTPUT" | grep -q "no soundcards found"; then' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "❌ No sound cards found by ALSA"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "💡 This usually means:"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "   1. Audio devices not mounted: --device=/dev/snd:/dev/snd"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "   2. Need privileged mode: --privileged"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "   3. Host audio system not running"' >> /app/comprehensive-audio-test.sh && \
+    echo 'elif echo "$APLAY_OUTPUT" | grep -q "card"; then' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "✅ ALSA playback devices found:"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "$APLAY_OUTPUT"' >> /app/comprehensive-audio-test.sh && \
+    echo 'else' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "❌ ALSA error: $APLAY_OUTPUT"' >> /app/comprehensive-audio-test.sh && \
+    echo 'fi' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "ALSA capture devices:"' >> /app/comprehensive-audio-test.sh && \
+    echo 'ARECORD_OUTPUT=$(arecord -l 2>&1)' >> /app/comprehensive-audio-test.sh && \
+    echo 'if echo "$ARECORD_OUTPUT" | grep -q "no soundcards found"; then' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "❌ No sound cards found for recording"' >> /app/comprehensive-audio-test.sh && \
+    echo 'elif echo "$ARECORD_OUTPUT" | grep -q "card"; then' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "✅ ALSA capture devices found:"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "$ARECORD_OUTPUT"' >> /app/comprehensive-audio-test.sh && \
+    echo 'else' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "❌ ALSA capture error: $ARECORD_OUTPUT"' >> /app/comprehensive-audio-test.sh && \
+    echo 'fi' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo '' >> /app/comprehensive-audio-test.sh && \
+    echo '# 4. Device Permission Tests' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "🔐 === DEVICE PERMISSION TESTS ==="' >> /app/comprehensive-audio-test.sh && \
+    echo 'for device in /dev/snd/control* /dev/snd/pcm*; do' >> /app/comprehensive-audio-test.sh && \
+    echo '    if [ -e "$device" ]; then' >> /app/comprehensive-audio-test.sh && \
+    echo '        perms=$(ls -la "$device")' >> /app/comprehensive-audio-test.sh && \
+    echo '        if [ -r "$device" ] && [ -w "$device" ]; then' >> /app/comprehensive-audio-test.sh && \
+    echo '            echo "✅ $(basename $device): $perms"' >> /app/comprehensive-audio-test.sh && \
+    echo '        else' >> /app/comprehensive-audio-test.sh && \
+    echo '            echo "❌ $(basename $device): $perms (NO ACCESS)"' >> /app/comprehensive-audio-test.sh && \
+    echo '        fi' >> /app/comprehensive-audio-test.sh && \
+    echo '    fi' >> /app/comprehensive-audio-test.sh && \
+    echo 'done' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo '' >> /app/comprehensive-audio-test.sh && \
+    echo '# 5. Specific Device Tests' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "🎯 === SPECIFIC DEVICE TESTS ==="' >> /app/comprehensive-audio-test.sh && \
+    echo 'for card in 0 1 2; do' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "Testing card $card:"' >> /app/comprehensive-audio-test.sh && \
+    echo '    if [ -c "/dev/snd/controlC${card}" ]; then' >> /app/comprehensive-audio-test.sh && \
+    echo '        echo "  ✅ Control device exists: /dev/snd/controlC${card}"' >> /app/comprehensive-audio-test.sh && \
+    echo '        # Test if we can read device info' >> /app/comprehensive-audio-test.sh && \
+    echo '        if timeout 2 cat "/dev/snd/controlC${card}" >/dev/null 2>&1; then' >> /app/comprehensive-audio-test.sh && \
+    echo '            echo "  ✅ Device accessible for reading"' >> /app/comprehensive-audio-test.sh && \
+    echo '        else' >> /app/comprehensive-audio-test.sh && \
+    echo '            echo "  ⚠️ Device not accessible or timeout"' >> /app/comprehensive-audio-test.sh && \
+    echo '        fi' >> /app/comprehensive-audio-test.sh && \
+    echo '    else' >> /app/comprehensive-audio-test.sh && \
+    echo '        echo "  ❌ Control device missing: /dev/snd/controlC${card}"' >> /app/comprehensive-audio-test.sh && \
+    echo '    fi' >> /app/comprehensive-audio-test.sh && \
+    echo 'done' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo '' >> /app/comprehensive-audio-test.sh && \
+    echo '# 6. QCC5125 Specific Tests' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "🎧 === QCC5125 DEVICE TESTS ==="' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "Testing QCC5125 device on card 2:"' >> /app/comprehensive-audio-test.sh && \
+    echo 'if aplay -D plughw:2,0 --dump-hw-params /dev/null 2>/dev/null; then' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "✅ QCC5125 device (plughw:2,0) is accessible"' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "Hardware parameters for plughw:2,0:"' >> /app/comprehensive-audio-test.sh && \
+    echo '    aplay -D plughw:2,0 --dump-hw-params /dev/null 2>&1 | head -10' >> /app/comprehensive-audio-test.sh && \
+    echo 'else' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "❌ QCC5125 device (plughw:2,0) not accessible"' >> /app/comprehensive-audio-test.sh && \
+    echo 'fi' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo '' >> /app/comprehensive-audio-test.sh && \
+    echo '# 7. Generate Test Audio' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "🎶 === AUDIO GENERATION TESTS ==="' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "Generating test tone using sox..."' >> /app/comprehensive-audio-test.sh && \
+    echo 'if command -v sox >/dev/null; then' >> /app/comprehensive-audio-test.sh && \
+    echo '    sox -n -t wav /tmp/test-tone.wav synth 2 sine 440 2>/dev/null && echo "✅ Test tone generated" || echo "❌ Failed to generate test tone"' >> /app/comprehensive-audio-test.sh && \
+    echo 'else' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "⚠️ sox not available for test tone generation"' >> /app/comprehensive-audio-test.sh && \
+    echo 'fi' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo '' >> /app/comprehensive-audio-test.sh && \
+    echo '# 8. Audio Playback Tests (without actual sound)' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "🔊 === AUDIO PLAYBACK TESTS ==="' >> /app/comprehensive-audio-test.sh && \
+    echo 'if [ -f "/tmp/test-tone.wav" ]; then' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "Testing playback on default device:"' >> /app/comprehensive-audio-test.sh && \
+    echo '    if timeout 5 aplay -D default /tmp/test-tone.wav 2>/dev/null; then' >> /app/comprehensive-audio-test.sh && \
+    echo '        echo "✅ Default device playback test completed"' >> /app/comprehensive-audio-test.sh && \
+    echo '    else' >> /app/comprehensive-audio-test.sh && \
+    echo '        echo "❌ Default device playback failed"' >> /app/comprehensive-audio-test.sh && \
+    echo '    fi' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "Testing playback on QCC5125 device:"' >> /app/comprehensive-audio-test.sh && \
+    echo '    if timeout 5 aplay -D plughw:2,0 /tmp/test-tone.wav 2>/dev/null; then' >> /app/comprehensive-audio-test.sh && \
+    echo '        echo "✅ QCC5125 device playback test completed"' >> /app/comprehensive-audio-test.sh && \
+    echo '    else' >> /app/comprehensive-audio-test.sh && \
+    echo '        echo "❌ QCC5125 device playback failed"' >> /app/comprehensive-audio-test.sh && \
+    echo '    fi' >> /app/comprehensive-audio-test.sh && \
+    echo 'else' >> /app/comprehensive-audio-test.sh && \
+    echo '    echo "⚠️ No test audio file available for playback tests"' >> /app/comprehensive-audio-test.sh && \
+    echo 'fi' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo '' >> /app/comprehensive-audio-test.sh && \
+    echo '# 9. Environment Summary' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "🌍 === ENVIRONMENT SUMMARY ==="' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "Current audio environment variables:"' >> /app/comprehensive-audio-test.sh && \
+    echo 'env | grep -E "(ALSA|AUDIO|PULSE)" || echo "No audio environment variables set"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "Audio group membership:"' >> /app/comprehensive-audio-test.sh && \
+    echo 'groups | grep -o audio && echo "✅ User is in audio group" || echo "❌ User is NOT in audio group"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo '' >> /app/comprehensive-audio-test.sh && \
+    echo '# 10. Final Recommendations' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "💡 === RECOMMENDATIONS ==="' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "For successful audio operation:"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "1. Ensure Docker is run with --device=/dev/snd:/dev/snd"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "2. Add --group-add audio to docker run command"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "3. Consider --privileged for full audio access (less secure)"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "4. Mount audio devices: -v /dev/snd:/dev/snd"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "5. Set proper permissions on host audio devices"' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo' >> /app/comprehensive-audio-test.sh && \
+    echo 'echo "🎵 === AUDIO TEST COMPLETED ==="' >> /app/comprehensive-audio-test.sh && \
+    chmod +x /app/comprehensive-audio-test.sh
+
+# Create simple interactive audio test
+RUN echo '#!/bin/bash' > /app/interactive-audio-test.sh && \
+    echo 'echo "🎵 Interactive Audio Test"' >> /app/interactive-audio-test.sh && \
+    echo 'echo "======================="' >> /app/interactive-audio-test.sh && \
+    echo 'echo' >> /app/interactive-audio-test.sh && \
+    echo '' >> /app/interactive-audio-test.sh && \
+    echo '# Check if audio is properly setup' >> /app/interactive-audio-test.sh && \
+    echo 'if [ ! -d "/dev/snd" ] || [ -z "$(ls -A /dev/snd 2>/dev/null)" ]; then' >> /app/interactive-audio-test.sh && \
+    echo '    echo "⚠️  WARNING: No audio devices detected!"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "🐳 To fix this, run the container with proper audio device mounting:"' >> /app/interactive-audio-test.sh && \
+    echo '    echo' >> /app/interactive-audio-test.sh && \
+    echo '    echo "docker run -it --rm --device=/dev/snd:/dev/snd your-image"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "   OR"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "docker run -it --rm --privileged -v /dev/snd:/dev/snd your-image"' >> /app/interactive-audio-test.sh && \
+    echo '    echo' >> /app/interactive-audio-test.sh && \
+    echo '    echo "Some tests will fail without proper audio device access."' >> /app/interactive-audio-test.sh && \
+    echo '    echo' >> /app/interactive-audio-test.sh && \
+    echo 'fi' >> /app/interactive-audio-test.sh && \
+    echo '' >> /app/interactive-audio-test.sh && \
+    echo 'while true; do' >> /app/interactive-audio-test.sh && \
+    echo '    echo "Select test to run:"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "1) Full comprehensive test"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "2) Quick device check"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "3) ALSA playback devices"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "4) Test QCC5125 device"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "5) Generate and play test tone"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "6) Check permissions"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "7) Docker setup help"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "9) Release audio locks and retry"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "a) Test C-Media USB Audio (alternative)"' >> /app/interactive-audio-test.sh && \
+    echo '    echo "0) Exit"' >> /app/interactive-audio-test.sh && \
+    echo '    echo' >> /app/interactive-audio-test.sh && \
+    echo '    read -p "Enter choice (0-9, a): " choice' >> /app/interactive-audio-test.sh && \
+    echo '    echo' >> /app/interactive-audio-test.sh && \
+    echo '    case $choice in' >> /app/interactive-audio-test.sh && \
+    echo '        1) /app/comprehensive-audio-test.sh ;;' >> /app/interactive-audio-test.sh && \
+    echo '        2) echo "Quick device check:"; ls -la /dev/snd/ 2>/dev/null || echo "❌ No audio devices found" ;;' >> /app/interactive-audio-test.sh && \
+    echo '        3) echo "ALSA playback devices:"; aplay -l 2>&1 || echo "❌ No audio devices available" ;;' >> /app/interactive-audio-test.sh && \
+    echo '        4) echo "Testing QCC5125:"; echo "Basic QCC5125 device check:"; if aplay -D hw:2,0 --dump-hw-params /dev/null 2>/dev/null; then echo "✅ QCC5125 hw:2,0 accessible"; else echo "❌ QCC5125 hw:2,0 not accessible"; fi; echo "Alternative QCC5125 access methods:"; for device in "plughw:2,0" "hw:QCC5125" "hw:2"; do if aplay -D "$device" --dump-hw-params /dev/null 2>/dev/null; then echo "✅ $device accessible"; else echo "❌ $device not accessible"; fi; done; echo "QCC5125 device info:"; cat /proc/asound/card2/stream0 2>/dev/null || echo "Stream info not available" ;;' >> /app/interactive-audio-test.sh && \
+    echo '        5) echo "Generating test tone..."; if command -v sox >/dev/null; then sox -n -t wav /tmp/tone.wav synth 1 sine 440 2>/dev/null && echo "✅ Test tone generated"; echo "Testing on default device:"; if aplay /tmp/tone.wav 2>/dev/null; then echo "✅ Default playback completed"; else echo "❌ Default playback failed"; fi; echo "Testing specifically on QCC5125:"; if timeout 10 aplay -D hw:2,0 /tmp/tone.wav 2>/dev/null; then echo "✅ QCC5125 playback completed!"; else echo "❌ QCC5125 playback failed, trying alternative methods..."; for device in "plughw:2,0" "hw:QCC5125"; do echo "Trying $device..."; if timeout 10 aplay -D "$device" /tmp/tone.wav 2>/dev/null; then echo "✅ $device playback succeeded!"; break; else echo "❌ $device failed"; fi; done; fi; else echo "❌ sox not available"; fi ;;' >> /app/interactive-audio-test.sh && \
+    echo '        6) echo "Audio device permissions:"; if [ -d "/dev/snd" ]; then ls -la /dev/snd/; else echo "❌ No /dev/snd directory"; fi ;;' >> /app/interactive-audio-test.sh && \
+    echo '        7) /app/docker-run-examples.sh ;;' >> /app/interactive-audio-test.sh && \
+    echo '        8) echo "🎧 QCC5125 Advanced Diagnostics:"; echo "Checking QCC5125 capabilities..."; echo; echo "=== USB Audio Device Detection ==="; lsusb | grep -i audio || echo "USB audio devices not visible"; echo; echo "=== All ALSA Cards ==="; cat /proc/asound/cards 2>/dev/null || echo "ALSA cards not available"; echo; echo "=== Available Audio Devices ==="; aplay -l 2>/dev/null || echo "No playback devices found"; echo; echo "=== Device Analysis ==="; echo "From aplay output, analyzing devices:"; if aplay -l 2>/dev/null | grep -q "card 2.*QCC5125"; then echo "✅ QCC5125 confirmed on card 2"; QCC_CARD=2; elif aplay -l 2>/dev/null | grep -q "card 1.*QCC5125"; then echo "✅ QCC5125 found on card 1"; QCC_CARD=1; else echo "❌ QCC5125 not found in expected cards"; QCC_CARD=-1; fi; if aplay -l 2>/dev/null | grep -q "USB Audio Device"; then CMEDIA_CARD=$(aplay -l 2>/dev/null | grep "USB Audio Device" | head -1 | sed "s/card \\([0-9]\\).*/\\1/"); echo "✅ USB Audio Device (C-Media) found on card $CMEDIA_CARD"; else echo "❌ USB Audio Device not found"; CMEDIA_CARD=-1; fi; echo; echo "=== Testing Identified Devices ==="; if [ "$QCC_CARD" != "-1" ]; then echo "Testing QCC5125 on card $QCC_CARD:"; echo "Checking device accessibility:"; if timeout 3 aplay -D hw:$QCC_CARD,0 --dump-hw-params /dev/null 2>/dev/null; then echo "✅ QCC5125 hw:$QCC_CARD,0 accessible"; else echo "❌ QCC5125 hw:$QCC_CARD,0 not accessible - checking alternatives"; fi; echo "Testing with plughw:"; if timeout 3 aplay -D plughw:$QCC_CARD,0 --dump-hw-params /dev/null 2>/dev/null; then echo "✅ QCC5125 plughw:$QCC_CARD,0 accessible"; else echo "❌ QCC5125 plughw:$QCC_CARD,0 not accessible"; fi; echo "Attempting actual audio test:"; if sox -n -t wav /tmp/qcc-test.wav synth 1 sine 440 2>/dev/null; then echo "Test tone generated, trying playback..."; if timeout 5 aplay -D plughw:$QCC_CARD,0 /tmp/qcc-test.wav 2>/dev/null; then echo "🎉 SUCCESS: QCC5125 audio playback works!"; else echo "❌ QCC5125 playback failed"; fi; else echo "❌ Could not generate test tone"; fi; fi; if [ "$CMEDIA_CARD" != "-1" ]; then echo; echo "Testing C-Media USB Audio on card $CMEDIA_CARD:"; if timeout 3 aplay -D hw:$CMEDIA_CARD,0 --dump-hw-params /dev/null 2>/dev/null; then echo "✅ C-Media hw:$CMEDIA_CARD,0 accessible"; if sox -n -t wav /tmp/cmedia-test.wav synth 1 sine 880 2>/dev/null; then if timeout 5 aplay -D hw:$CMEDIA_CARD,0 /tmp/cmedia-test.wav 2>/dev/null; then echo "🎉 SUCCESS: C-Media audio playback works!"; else echo "❌ C-Media playback failed"; fi; fi; else echo "❌ C-Media hw:$CMEDIA_CARD,0 not accessible"; fi; fi; echo; echo "=== Subdevice Status Analysis ==="; echo "Checking why QCC5125 shows 0/1 subdevices:"; if [ "$QCC_CARD" != "-1" ]; then echo "Checking if device is in use:"; lsof /dev/snd/pcmC${QCC_CARD}D0p 2>/dev/null && echo "Device is currently in use" || echo "Device not currently in use"; echo "Checking device permissions:"; ls -la /dev/snd/pcmC${QCC_CARD}D0p 2>/dev/null || echo "PCM device file not found"; fi ;;' >> /app/interactive-audio-test.sh && \
+    echo '        9) echo "🔓 Release Audio Locks and Retry:"; echo "Attempting to resolve device access issues..."; echo; echo "=== Current Audio Processes ==="; ps aux | grep -E "(pulse|alsa|audio)" | grep -v grep || echo "No obvious audio processes found"; echo; echo "=== Killing potential conflicting processes ==="; pkill -f "pulseaudio" 2>/dev/null && echo "Killed PulseAudio" || echo "PulseAudio not running"; pkill -f "alsa" 2>/dev/null && echo "Killed ALSA processes" || echo "No ALSA processes to kill"; echo; echo "=== Resetting ALSA ==="; if command -v alsactl >/dev/null; then alsactl init 2>/dev/null && echo "✅ ALSA reset successful" || echo "❌ ALSA reset failed"; else echo "alsactl not available"; fi; echo; echo "=== Testing QCC5125 after cleanup ==="; if aplay -l 2>/dev/null | grep -q "card 2.*QCC5125"; then QCC_CARD=2; echo "QCC5125 detected on card 2"; echo "Checking subdevice availability:"; cat /proc/asound/card2/pcm0p/sub0/status 2>/dev/null || echo "Subdevice status not accessible"; echo "Attempting direct hardware access:"; if sox -n -t wav /tmp/cleanup-test.wav synth 0.5 sine 440 2>/dev/null; then echo "Test tone ready, attempting playback..."; for method in "hw:2,0" "plughw:2,0" "default:CARD=QCC5125"; do echo "Trying $method..."; if timeout 3 aplay -D "$method" /tmp/cleanup-test.wav 2>/dev/null; then echo "🎉 SUCCESS with $method!"; break; else echo "❌ Failed with $method"; fi; done; else echo "❌ Cannot generate test audio"; fi; else echo "❌ QCC5125 not found"; fi ;;' >> /app/interactive-audio-test.sh && \
+    echo '        a) echo "🎵 C-Media USB Audio Test (Alternative Device):"; echo "Testing the C-Media USB Audio Device as alternative to QCC5125..."; echo; if aplay -l 2>/dev/null | grep -q "USB Audio Device"; then CMEDIA_CARD=$(aplay -l 2>/dev/null | grep "USB Audio Device" | head -1 | sed "s/card \\([0-9]\\).*/\\1/"); echo "✅ C-Media USB Audio Device found on card $CMEDIA_CARD"; echo; echo "=== Device Information ==="; echo "Device: /dev/snd/pcmC${CMEDIA_CARD}D0p"; ls -la /dev/snd/pcmC${CMEDIA_CARD}D0p 2>/dev/null || echo "PCM device not found"; echo "Control: /dev/snd/controlC${CMEDIA_CARD}"; ls -la /dev/snd/controlC${CMEDIA_CARD} 2>/dev/null || echo "Control device not found"; echo; echo "=== Testing C-Media Access Methods ==="; if sox -n -t wav /tmp/cmedia-test.wav synth 1 sine 880 2>/dev/null; then echo "✅ Test tone generated (880Hz)"; echo; for method in "hw:${CMEDIA_CARD},0" "plughw:${CMEDIA_CARD},0" "default:CARD=Device"; do echo "Testing $method..."; if timeout 5 aplay -D "$method" /tmp/cmedia-test.wav 2>/dev/null; then echo "🎉 SUCCESS: C-Media works with $method!"; echo "💡 You can use this device for audio instead of QCC5125"; echo "   Set ALSA_DEVICE=$method in your environment"; break; else echo "❌ Failed with $method"; fi; done; echo; echo "=== Hardware Parameters ==="; if timeout 3 aplay -D hw:${CMEDIA_CARD},0 --dump-hw-params /dev/null 2>/dev/null; then echo "✅ Hardware parameters accessible"; aplay -D hw:${CMEDIA_CARD},0 --dump-hw-params /dev/null 2>&1 | head -10; else echo "❌ Cannot access hardware parameters"; fi; else echo "❌ Cannot generate test tone"; fi; else echo "❌ C-Media USB Audio Device not found"; echo "Available devices:"; aplay -l 2>/dev/null; fi ;;' >> /app/interactive-audio-test.sh && \
+    echo '        0) echo "Goodbye!"; exit 0 ;;' >> /app/interactive-audio-test.sh && \
+    echo '        *) echo "Invalid choice!" ;;' >> /app/interactive-audio-test.sh && \
+    echo '    esac' >> /app/interactive-audio-test.sh && \
+    echo '    echo' >> /app/interactive-audio-test.sh && \
+    echo '    echo "Press Enter to continue..."' >> /app/interactive-audio-test.sh && \
+    echo '    read' >> /app/interactive-audio-test.sh && \
+    echo '    clear' >> /app/interactive-audio-test.sh && \
+    echo 'done' >> /app/interactive-audio-test.sh
+
+# Create Docker run helper script
+RUN printf '#!/bin/bash\n\
+echo "🐳 Docker Run Examples for Audio Testing"\n\
+echo "========================================"\n\
+echo\n\
+echo "1. Basic audio test:"\n\
+echo "   docker run -it --rm --device=/dev/snd:/dev/snd your-image:test"\n\
+echo\n\
+echo "2. With audio group:"\n\
+echo "   docker run -it --rm --device=/dev/snd:/dev/snd --group-add audio your-image:test"\n\
+echo\n\
+echo "3. Privileged mode (full access):"\n\
+echo "   docker run -it --rm --privileged -v /dev/snd:/dev/snd your-image:test"\n\
+echo\n\
+echo "4. With volume mount:"\n\
+echo "   docker run -it --rm -v /dev/snd:/dev/snd --device=/dev/snd your-image:test"\n\
+echo\n\
+echo "5. Interactive test mode:"\n\
+echo "   docker run -it --rm --device=/dev/snd:/dev/snd your-image:test /app/interactive-audio-test.sh"\n\
+echo\n\
+echo "6. On Windows with WSL2:"\n\
+echo "   docker run -it --rm --device=/dev/snd:/dev/snd your-image:test"\n\
+echo\n\
+echo "7. Build and test in one command:"\n\
+echo "   docker build -f Dockerfile.test -t robot-audio-test . && docker run -it --rm --device=/dev/snd:/dev/snd robot-audio-test"\n' > /app/docker-run-examples.sh
+
+# Make all scripts executable
+RUN chmod +x /app/*.sh 2>/dev/null || true
+
+# Create audio group and user
+RUN addgroup -g 29 -S audio 2>/dev/null || true && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 && \
+    adduser nodejs audio
+
+# Set ownership
+RUN chown -R nodejs:nodejs /app
+
+# Switch to non-root user for testing
+USER nodejs
+
+# Expose port for any web-based tests
+EXPOSE 8080
+
+# Default command runs comprehensive test
+CMD ["/app/comprehensive-audio-test.sh"]
