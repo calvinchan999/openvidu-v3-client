@@ -31,20 +31,17 @@ const puppeteer = require("puppeteer");
     console.log(`   - TARGET_SERVER: ${process.env.TARGET_SERVER}`);
     console.log(`   - NODE_ENV: ${process.env.NODE_ENV}`);
     
-    // Get Chrome arguments from environment or use OpenVidu v2 proven config
+    // Get Chrome arguments from environment or use minimal headless-compatible config
     const chromeArgs = process.env.CHROME_ARGS ? 
       process.env.CHROME_ARGS.split(',') : [
-        "--use-fake-ui-for-media-stream",
         "--no-sandbox",
-        "--disable-gpu",
         "--disable-dev-shm-usage",
+        "--disable-gpu",
         "--disable-setuid-sandbox",
-        "--disable-web-security",
-        "--allow-running-insecure-content",
-        "--unsafely-treat-insecure-origin-as-secure",
+        "--use-fake-ui-for-media-stream",
         "--autoplay-policy=no-user-gesture-required",
-        "--hide-scrollbars",
-        "--incognito"
+        "--single-process",
+        "--no-zygote"
       ];
     
     // Launch the browser with retry logic
@@ -58,7 +55,7 @@ const puppeteer = require("puppeteer");
         
         browser = await puppeteer.launch({
           headless: true,  // Use stable headless mode like v2
-          executablePath: process.env.CHROME_BIN || "/usr/bin/chromium-browser",
+          executablePath: process.env.CHROME_BIN || "/usr/bin/google-chrome-stable",
           ignoreDefaultArgs: ['--mute-audio'],  // Same as v2 config
           args: chromeArgs,
           handleSIGINT: false,

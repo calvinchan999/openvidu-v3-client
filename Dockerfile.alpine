@@ -1,8 +1,7 @@
 FROM node:18-alpine
 
-# Install essential packages
+# Install essential packages and Google Chrome
 RUN apk add --no-cache \
-    chromium \
     nss \
     freetype \
     freetype-dev \
@@ -18,11 +17,20 @@ RUN apk add --no-cache \
     alsa-lib-dev \
     dbus \
     nano \
-    su-exec
+    su-exec \
+    wget \
+    gnupg
 
-# Set environment variables
+# Install Google Chrome (since Alpine doesn't have official Chrome, we'll use Chromium but symlink it)
+RUN apk add --no-cache chromium && \
+    ln -sf /usr/bin/chromium-browser /usr/bin/google-chrome-stable && \
+    ln -sf /usr/bin/chromium-browser /usr/bin/google-chrome && \
+    ln -sf /usr/bin/chromium-browser /usr/bin/chrome
+
+# Set environment variables for Google Chrome compatibility
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable \
+    CHROME_BIN=/usr/bin/google-chrome-stable \
     NODE_ENV=production \
     PULSE_SERVER=unix:/tmp/pulse-socket
 

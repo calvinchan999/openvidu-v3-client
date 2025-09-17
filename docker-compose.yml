@@ -56,9 +56,9 @@ services:
       - PARTICIPANT_NAME_SUFFIX_LENGTH=8
       - PARTICIPANT_NAME_GENERATION=timestamp
       
-      # Chrome/Puppeteer configuration - using Chromium in Alpine
-      - CHROME_BIN=/usr/bin/chromium-browser
-      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+      # Chrome/Puppeteer configuration - using Google Chrome
+      - CHROME_BIN=/usr/bin/google-chrome-stable
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
       
       # User switching for audio setup
@@ -76,8 +76,8 @@ services:
       - MEDIA_DEVICES_ENABLED=true
       - AUTOPLAY_POLICY=no-user-gesture-required
       
-      # Chrome flags for real audio device access (not fake devices)
-      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-setuid-sandbox,--disable-web-security,--allow-running-insecure-content,--unsafely-treat-insecure-origin-as-secure,--autoplay-policy=no-user-gesture-required,--hide-scrollbars,--incognito,--use-fake-ui-for-media-stream,--alsa-output-device=hw:1,0,--alsa-input-device=hw:1,0
+      # Chrome flags for headless mode compatibility - minimal and clean with single-process
+      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-setuid-sandbox,--use-fake-ui-for-media-stream,--autoplay-policy=no-user-gesture-required,--single-process,--no-zygote,--alsa-output-device=hw:1,0,--alsa-input-device=hw:1,0
       
       # Logging and debugging
       - ENABLE_LOGGING=true
@@ -102,7 +102,7 @@ services:
       # Mount host audio configuration
       - /etc/asound.conf:/etc/asound.conf:ro
     tmpfs:
-      - /app/.config/chromium:uid=1000,gid=1000,mode=755
+      - /app/.config/google-chrome:uid=1000,gid=1000,mode=755
       - /app/.cache:uid=1000,gid=1000,mode=755
     restart: unless-stopped
     shm_size: 2gb
