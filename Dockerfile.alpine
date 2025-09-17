@@ -76,15 +76,39 @@ RUN echo "default-server = unix:/tmp/pulse-socket" > /etc/pulse/client.conf && \
     echo "extra-arguments = --log-target=syslog" >> /etc/pulse/client.conf
 
 # Create PulseAudio daemon configuration
-RUN echo "load-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-socket" > /etc/pulse/daemon.conf && \
-    echo "load-module module-alsa-sink device=default" >> /etc/pulse/daemon.conf && \
-    echo "load-module module-alsa-source device=default" >> /etc/pulse/daemon.conf && \
-    echo "load-module module-suspend-on-idle" >> /etc/pulse/daemon.conf && \
-    echo "load-module module-device-restore" >> /etc/pulse/daemon.conf && \
-    echo "load-module module-stream-restore" >> /etc/pulse/daemon.conf && \
-    echo "load-module module-card-restore" >> /etc/pulse/daemon.conf && \
-    echo "load-module module-augment-properties" >> /etc/pulse/daemon.conf && \
-    echo "load-module module-switch-on-port-available" >> /etc/pulse/daemon.conf
+RUN echo "# PulseAudio daemon configuration" > /etc/pulse/daemon.conf && \
+    echo "exit-idle-time = -1" >> /etc/pulse/daemon.conf && \
+    echo "flat-volumes = no" >> /etc/pulse/daemon.conf && \
+    echo "default-sample-format = s16le" >> /etc/pulse/daemon.conf && \
+    echo "default-sample-rate = 44100" >> /etc/pulse/daemon.conf && \
+    echo "default-sample-channels = 2" >> /etc/pulse/daemon.conf && \
+    echo "default-channel-map = front-left,front-right" >> /etc/pulse/daemon.conf && \
+    echo "high-priority = yes" >> /etc/pulse/daemon.conf && \
+    echo "nice-level = -11" >> /etc/pulse/daemon.conf && \
+    echo "realtime-scheduling = yes" >> /etc/pulse/daemon.conf && \
+    echo "realtime-priority = 5" >> /etc/pulse/daemon.conf && \
+    echo "avoid-resampling = yes" >> /etc/pulse/daemon.conf
+
+# Create PulseAudio module loading configuration (default.pa)
+RUN echo "#!/usr/bin/pulseaudio -nF" > /etc/pulse/default.pa && \
+    echo "" >> /etc/pulse/default.pa && \
+    echo "# Load native protocol module with unix socket" >> /etc/pulse/default.pa && \
+    echo "load-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-socket" >> /etc/pulse/default.pa && \
+    echo "" >> /etc/pulse/default.pa && \
+    echo "# Load ALSA modules" >> /etc/pulse/default.pa && \
+    echo "load-module module-alsa-sink device=default" >> /etc/pulse/default.pa && \
+    echo "load-module module-alsa-source device=default" >> /etc/pulse/default.pa && \
+    echo "" >> /etc/pulse/default.pa && \
+    echo "# Load restoration modules" >> /etc/pulse/default.pa && \
+    echo "load-module module-device-restore" >> /etc/pulse/default.pa && \
+    echo "load-module module-stream-restore" >> /etc/pulse/default.pa && \
+    echo "load-module module-card-restore" >> /etc/pulse/default.pa && \
+    echo "load-module module-augment-properties" >> /etc/pulse/default.pa && \
+    echo "" >> /etc/pulse/default.pa && \
+    echo "# Load additional modules" >> /etc/pulse/default.pa && \
+    echo "load-module module-suspend-on-idle" >> /etc/pulse/default.pa && \
+    echo "load-module module-switch-on-port-available" >> /etc/pulse/default.pa && \
+    echo "load-module module-default-device-restore" >> /etc/pulse/default.pa
 
 # Create ALSA configuration for better hardware compatibility
 RUN echo "# ALSA configuration for QCC5125 and USB Audio Device access" > /etc/asound.conf && \
@@ -145,11 +169,11 @@ RUN echo '#!/bin/bash' > /app/start-pulseaudio.sh && \
     echo 'export PULSE_SERVER="unix:/tmp/pulse-socket"' >> /app/start-pulseaudio.sh && \
     echo 'export PULSE_RUNTIME_PATH="/tmp/pulse"' >> /app/start-pulseaudio.sh && \
     echo '' >> /app/start-pulseaudio.sh && \
-    echo '# Start PulseAudio daemon with more robust settings' >> /app/start-pulseaudio.sh && \
+    echo '# Start PulseAudio daemon with proper configuration file' >> /app/start-pulseaudio.sh && \
     echo 'pulseaudio --kill 2>/dev/null || true' >> /app/start-pulseaudio.sh && \
     echo 'sleep 2' >> /app/start-pulseaudio.sh && \
     echo '' >> /app/start-pulseaudio.sh && \
-    echo 'pulseaudio --system=false --daemonize=false --log-target=stderr --log-level=info --high-priority --realtime --disallow-module-loading=false --disallow-exit=false --exit-idle-time=-1 --flat-volumes=false --start > /tmp/pulseaudio.log 2>&1 &' >> /app/start-pulseaudio.sh && \
+    echo 'pulseaudio --system=false --daemonize=false --high-priority --realtime --disallow-module-loading=false --disallow-exit=false --file=/etc/pulse/default.pa --log-target=stderr --log-level=info > /tmp/pulseaudio.log 2>&1 &' >> /app/start-pulseaudio.sh && \
     echo 'PULSE_PID=$!' >> /app/start-pulseaudio.sh && \
     echo 'echo "PulseAudio started with PID: $PULSE_PID"' >> /app/start-pulseaudio.sh && \
     echo '' >> /app/start-pulseaudio.sh && \

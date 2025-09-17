@@ -33,20 +33,17 @@ services:
 
   # Headless Browser (connects to web-app) - Use Alpine for size optimization
   headless-browser:
-    # For local build, uncomment the build section:
     # build:
     #   context: .
-    #   dockerfile: Dockerfile.alpine  # Use Alpine for headless browser
-    
-    # For registry/pulled image, use this:
-    image: robot-audio-recorder:latest  # Change this to your registry URL if pushing to registry
+    #   dockerfile: Dockerfile.alpine  # Use Alpine ONLY for headless browser
+    image: devarcscontainerregistry.azurecr.io/openvidu-client-browser:v0.0.1
     container_name: robot-audio-recorder-headless
     # Start as root to set up audio permissions, then switch to target user
     # user: "${DOCKER_USER_ID:-1000}:${DOCKER_GROUP_ID:-1000}"
     group_add:
       - "29"  # Host audio group ID
       - "audio"  # Also add audio group by name
-    command: ["/app/setup-audio.sh", "node", "headless-launcher.js"]
+    command: ["/app/setup-audio.sh", "/app/start-pulseaudio.sh", "node", "headless-launcher.js"]
     environment:
       # Application configuration
       - WEBSITE_URL=http://web-app:8080
@@ -59,7 +56,7 @@ services:
       - PARTICIPANT_NAME_SUFFIX_LENGTH=8
       - PARTICIPANT_NAME_GENERATION=timestamp
       
-      # Chrome/Puppeteer configuration - using Chromium browser
+      # Chrome/Puppeteer configuration - using Chromium (Alpine container)
       - CHROME_BIN=/usr/bin/chromium-browser
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
@@ -68,14 +65,12 @@ services:
       - DOCKER_USER_ID=${DOCKER_USER_ID:-1000}
       - DOCKER_GROUP_ID=${DOCKER_GROUP_ID:-1000}
       
-      # Audio configuration - using proven working C-Media USB Audio Device
-      - ALSA_DEVICE=plughw:1,0
-      - AUDIO_DEVICE=plughw:1,0
-      - PULSE_DEVICE=plughw:1,0
-      - ALSA_PCM_CARD=1
+      # Audio configuration - using system default audio devices
+      - ALSA_DEVICE=default
+      - AUDIO_DEVICE=default
+      - PULSE_DEVICE=default
+      - ALSA_PCM_CARD=0
       - ALSA_PCM_DEVICE=0
-      # Fallback QCC5125 configuration
-      - QCC5125_DEVICE=hw:2,0
       
       # WebRTC and media configuration
       - WEBRTC_ENABLED=true
