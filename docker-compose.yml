@@ -38,8 +38,8 @@ services:
     #   dockerfile: Dockerfile.alpine  # Use Alpine ONLY for headless browser
     image: devarcscontainerregistry.azurecr.io/openvidu-client-browser:v0.0.1
     container_name: robot-audio-recorder-headless
-    # Use host user ID and ensure audio group access
-    user: "${DOCKER_USER_ID:-1000}:${DOCKER_GROUP_ID:-1000}"
+    # Start as root to set up audio permissions, then switch to target user
+    # user: "${DOCKER_USER_ID:-1000}:${DOCKER_GROUP_ID:-1000}"
     group_add:
       - "29"  # Host audio group ID
       - "audio"  # Also add audio group by name
@@ -61,7 +61,11 @@ services:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
       
-      # Audio configuration for Ubuntu 18 - Direct ALSA access to USB Audio Device
+      # User switching for audio setup
+      - DOCKER_USER_ID=${DOCKER_USER_ID:-1000}
+      - DOCKER_GROUP_ID=${DOCKER_GROUP_ID:-1000}
+      
+      # Audio configuration for Ubuntu 18 - USB Audio Device (card 1)
       - ALSA_DEVICE=hw:1,0
       - AUDIO_DEVICE=hw:1,0
       - ALSA_PCM_CARD=1
@@ -72,8 +76,8 @@ services:
       - MEDIA_DEVICES_ENABLED=true
       - AUTOPLAY_POLICY=no-user-gesture-required
       
-      # Chrome flags matching successful OpenVidu v2 config
-      - CHROME_ARGS=--use-fake-ui-for-media-stream,--no-sandbox,--disable-gpu,--disable-dev-shm-usage,--disable-setuid-sandbox,--disable-web-security,--allow-running-insecure-content,--unsafely-treat-insecure-origin-as-secure,--autoplay-policy=no-user-gesture-required,--hide-scrollbars,--incognito
+      # Chrome flags for real audio device access (not fake devices)
+      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-setuid-sandbox,--disable-web-security,--allow-running-insecure-content,--unsafely-treat-insecure-origin-as-secure,--autoplay-policy=no-user-gesture-required,--hide-scrollbars,--incognito,--use-fake-ui-for-media-stream,--alsa-output-device=hw:1,0,--alsa-input-device=hw:1,0
       
       # Logging and debugging
       - ENABLE_LOGGING=true
@@ -108,7 +112,9 @@ services:
       - SYS_ADMIN
       - SYS_NICE  # For audio priority
       - DAC_OVERRIDE  # Override file permissions for audio devices
-    privileged: false  # Keep security, but enable audio access
+      - CHOWN  # Allow changing ownership
+      - FOWNER  # Allow file operations
+    privileged: true  # Enable full access for audio device setup
     devices:
       - /dev/snd:/dev/snd  # Audio devices
     depends_on:

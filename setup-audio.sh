@@ -20,11 +20,37 @@ if [ ! -d "/dev/snd" ] || [ ! -c "/dev/snd/controlC0" ]; then
     log "🔧 Build mode detected - skipping device-specific checks"
 fi
 
-# Check if running as root or with proper permissions
-if [ "$(id -u)" -eq 0 ]; then
-    log "⚠️ Running as root - audio setup may have different behavior"
+# Check if running as root for initial setup
+INITIAL_USER=$(whoami)
+if [ "$INITIAL_USER" = "root" ]; then
+    log "🔧 Running initial setup as root for device permissions"
+    
+    # Fix audio device permissions as root
+    if [ "$BUILD_MODE" = "false" ]; then
+        log "🔧 Setting up audio device permissions as root..."
+        
+        # Set proper permissions for all audio devices
+        for device in /dev/snd/control* /dev/snd/pcm* /dev/snd/hw* /dev/snd/seq /dev/snd/timer; do
+            if [ -e "$device" ]; then
+                chown root:29 "$device" 2>/dev/null || true
+                chmod 664 "$device" 2>/dev/null || true
+                log "🔧 Set permissions for $(basename $device): $(ls -la $device 2>/dev/null | awk '{print $1,$3,$4}')"
+            fi
+        done
+        
+        log "✅ Audio device permissions configured"
+    fi
+    
+    # Switch to target user if arguments provided
+    if [ $# -gt 0 ]; then
+        TARGET_USER="${DOCKER_USER_ID:-1000}"
+        TARGET_GROUP="${DOCKER_GROUP_ID:-1000}"
+        
+        log "🔄 Switching to user $TARGET_USER:$TARGET_GROUP and executing: $@"
+        exec su-exec "$TARGET_USER:$TARGET_GROUP" "$0" "$@"
+    fi
 else
-    log "✅ Running as user: $(whoami) (uid: $(id -u))"
+    log "✅ Running as user: $INITIAL_USER (uid: $(id -u))"
 fi
 
 # Create audio group and user with correct group ID for host compatibility
@@ -56,12 +82,29 @@ if [ "$BUILD_MODE" = "false" ]; then
     if [ -w "/dev/snd/controlC0" ]; then
         log "✅ Audio device permissions OK"
     else
-        log "⚠️ No write access to audio devices"
-        # Try to fix permissions (if running as privileged)
-        if [ -c "/dev/snd/controlC0" ]; then
-            log "💡 Audio device exists but not writable by current user"
+        log "⚠️ No write access to audio devices - attempting to fix permissions"
+        
+        # Try to fix permissions for all audio devices
+        log "🔧 Setting audio device permissions..."
+        
+        # Make audio devices accessible to group (if we have permission)
+        for device in /dev/snd/control* /dev/snd/pcm* /dev/snd/hw* /dev/snd/seq /dev/snd/timer; do
+            if [ -e "$device" ]; then
+                # Try to change group to 29 and set group permissions
+                chgrp 29 "$device" 2>/dev/null || true
+                chmod g+rw "$device" 2>/dev/null || true
+                log "🔧 Updated permissions for $(basename $device): $(ls -la $device 2>/dev/null | awk '{print $1,$3,$4}')"
+            fi
+        done
+        
+        # Test again after permission changes
+        if [ -w "/dev/snd/controlC0" ]; then
+            log "✅ Audio device permissions fixed successfully"
+        else
+            log "❌ Still no write access to audio devices"
             log "   Device permissions: $(ls -la /dev/snd/controlC0)"
             log "   Current user: $(id)"
+            log "   💡 May need privileged mode or proper host audio group setup"
         fi
     fi
 fi
@@ -172,9 +215,9 @@ fi
 
 # Set up environment variables for audio
 log "🌍 Setting up audio environment variables..."
-export ALSA_DEVICE="${ALSA_DEVICE:-hw:0,0}"
-export AUDIO_DEVICE="${AUDIO_DEVICE:-hw:0,0}"
-export ALSA_PCM_CARD="${ALSA_PCM_CARD:-0}"
+export ALSA_DEVICE="${ALSA_DEVICE:-hw:1,0}"
+export AUDIO_DEVICE="${AUDIO_DEVICE:-hw:1,0}"
+export ALSA_PCM_CARD="${ALSA_PCM_CARD:-1}"
 export ALSA_PCM_DEVICE="${ALSA_PCM_DEVICE:-0}"
 
 # Disable PulseAudio to force ALSA direct access

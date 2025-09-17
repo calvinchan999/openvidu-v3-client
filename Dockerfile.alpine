@@ -17,6 +17,7 @@ RUN apk add --no-cache \
     alsa-lib \
     alsa-lib-dev \
     dbus \
+    nano \
     su-exec
 
 # Set environment variables
