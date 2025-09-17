@@ -38,11 +38,12 @@ services:
     #   dockerfile: Dockerfile.alpine  # Use Alpine ONLY for headless browser
     image: devarcscontainerregistry.azurecr.io/openvidu-client-browser:v0.0.1
     container_name: robot-audio-recorder-headless
-    # Use host user ID (set DOCKER_USER_ID and DOCKER_GROUP_ID in .env)
+    # Use host user ID and ensure audio group access
     user: "${DOCKER_USER_ID:-1000}:${DOCKER_GROUP_ID:-1000}"
     group_add:
       - "29"  # Host audio group ID
-    command: ["node", "headless-launcher.js"]
+      - "audio"  # Also add audio group by name
+    command: ["/app/setup-audio.sh", "node", "headless-launcher.js"]
     environment:
       # Application configuration
       - WEBSITE_URL=http://web-app:8080
@@ -91,9 +92,11 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./.env:/app/.env:ro
-      # Audio device access for Ubuntu 18 - Direct hardware access
+      # Audio device access for Ubuntu 18 - with proper permissions
       - /dev/snd:/dev/snd:rw
       - /sys/class/sound:/sys/class/sound:ro
+      # Mount host audio configuration
+      - /etc/asound.conf:/etc/asound.conf:ro
     tmpfs:
       - /app/.config/chromium:uid=1000,gid=1000,mode=755
       - /app/.cache:uid=1000,gid=1000,mode=755
@@ -104,7 +107,8 @@ services:
     cap_add:
       - SYS_ADMIN
       - SYS_NICE  # For audio priority
-    privileged: false  # Keep security, but enable proc access
+      - DAC_OVERRIDE  # Override file permissions for audio devices
+    privileged: false  # Keep security, but enable audio access
     devices:
       - /dev/snd:/dev/snd  # Audio devices
     depends_on:

@@ -27,7 +27,7 @@ else
     log "✅ Running as user: $(whoami) (uid: $(id -u))"
 fi
 
-# Create audio group if it does not exist
+# Create audio group and user with correct group ID for host compatibility
 if ! getent group audio > /dev/null 2>&1; then
     log "🔧 Creating audio group..."
     if [ "$(id -u)" -eq 0 ]; then
@@ -40,12 +40,30 @@ else
     log "✅ Audio group exists"
 fi
 
-# Check if current user is in audio group
-if groups $(whoami) | grep -q audio; then
+# Ensure current user is in audio group
+if groups $(whoami) | grep -q "29\|audio"; then
     log "✅ User $(whoami) is in audio group"
 else
     log "⚠️ User $(whoami) is NOT in audio group - this may cause audio issues"
-    log "💡 On the host, run: sudo usermod -a -G audio $(whoami)"
+    log "💡 Current groups: $(groups $(whoami))"
+fi
+
+# Fix audio device permissions if needed
+if [ "$BUILD_MODE" = "false" ]; then
+    log "🔧 Checking and fixing audio device permissions..."
+    
+    # Check if we have write access to audio devices
+    if [ -w "/dev/snd/controlC0" ]; then
+        log "✅ Audio device permissions OK"
+    else
+        log "⚠️ No write access to audio devices"
+        # Try to fix permissions (if running as privileged)
+        if [ -c "/dev/snd/controlC0" ]; then
+            log "💡 Audio device exists but not writable by current user"
+            log "   Device permissions: $(ls -la /dev/snd/controlC0)"
+            log "   Current user: $(id)"
+        fi
+    fi
 fi
 
 # Check audio device access
@@ -193,23 +211,28 @@ if [ "$BUILD_MODE" = "false" ]; then
     
     # Test specific ALSA device access
     log "🎵 Testing ALSA device access..."
-    if [ -c "/dev/snd/pcmC0D0p" ]; then
-        log "✅ Playback device pcmC0D0p available"
-    else
-        log "⚠️ Playback device pcmC0D0p not found"
-    fi
     
-    if [ -c "/dev/snd/pcmC0D0c" ]; then
-        log "✅ Capture device pcmC0D0c available"  
-    else
-        log "⚠️ Capture device pcmC0D0c not found"
-    fi
+    # Test control device access
+    for card in 0 1 2; do
+        if [ -c "/dev/snd/controlC${card}" ]; then
+            if [ -r "/dev/snd/controlC${card}" ] && [ -w "/dev/snd/controlC${card}" ]; then
+                log "✅ Control device controlC${card} accessible"
+            else
+                log "⚠️ Control device controlC${card} not accessible ($(ls -la /dev/snd/controlC${card}))"
+            fi
+        fi
+    done
     
-    # Test ALSA device enumeration
-    if command -v aplay >/dev/null; then
-        log "🎤 Testing ALSA device enumeration..."
-        aplay -l 2>/dev/null | head -5 || log "⚠️ aplay -l failed"
-    fi
+    # Test PCM device access  
+    for device in /dev/snd/pcmC*; do
+        if [ -c "$device" ]; then
+            if [ -r "$device" ] && [ -w "$device" ]; then
+                log "✅ PCM device $(basename $device) accessible"
+            else
+                log "⚠️ PCM device $(basename $device) not accessible ($(ls -la $device))"
+            fi
+        fi
+    done
     
 else
     log "⏭️ Skipping audio access tests (build mode)"
