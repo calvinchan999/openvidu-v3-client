@@ -27,10 +27,10 @@ RUN apk add --no-cache chromium && \
     ln -sf /usr/bin/chromium-browser /usr/bin/google-chrome && \
     ln -sf /usr/bin/chromium-browser /usr/bin/chrome
 
-# Set environment variables for Google Chrome compatibility
+# Set environment variables for Chromium compatibility
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable \
-    CHROME_BIN=/usr/bin/google-chrome-stable \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+    CHROME_BIN=/usr/bin/chromium-browser \
     NODE_ENV=production \
     PULSE_SERVER=unix:/tmp/pulse-socket
 
@@ -87,9 +87,9 @@ USER nodejs
 # Expose port
 EXPOSE 8080
 
-# Simple health check
+# Simple health check - check if the node process is running
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8080/local-health || exit 1
+    CMD pgrep -f "node headless-launcher.js" || exit 1
 
 # Default command with audio setup
 CMD ["/app/setup-audio.sh", "node", "headless-launcher.js"]

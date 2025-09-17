@@ -76,8 +76,8 @@ services:
       - MEDIA_DEVICES_ENABLED=true
       - AUTOPLAY_POLICY=no-user-gesture-required
       
-      # Chrome flags for new headless mode - minimal for compatibility
-      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-setuid-sandbox,--use-fake-ui-for-media-stream,--autoplay-policy=no-user-gesture-required,--alsa-output-device=hw:1,0,--alsa-input-device=hw:1,0
+      # Chrome flags - Let headless-launcher.js handle Chrome args for better compatibility
+      # CHROME_ARGS removed to prevent conflicts with headless-launcher.js defaults
       
       # Logging and debugging
       - ENABLE_LOGGING=true
@@ -97,10 +97,8 @@ services:
       - ./logs:/app/logs
       - ./.env:/app/.env:ro
       # Audio device access for Ubuntu 18 - with proper permissions
-      - /dev/snd:/dev/snd:rw
       - /sys/class/sound:/sys/class/sound:ro
-      # Mount host audio configuration
-      - /etc/asound.conf:/etc/asound.conf:ro
+      # Note: /etc/asound.conf mount removed - using container's own config
     tmpfs:
       - /app/.config/google-chrome:uid=1000,gid=1000,mode=755
       - /app/.cache:uid=1000,gid=1000,mode=755
@@ -109,12 +107,9 @@ services:
     security_opt:
       - seccomp:unconfined
     cap_add:
-      - SYS_ADMIN
-      - SYS_NICE  # For audio priority
+      - SYS_ADMIN  # Required for Chrome sandboxing
       - DAC_OVERRIDE  # Override file permissions for audio devices
-      - CHOWN  # Allow changing ownership
-      - FOWNER  # Allow file operations
-    privileged: true  # Enable full access for audio device setup
+    # privileged: true removed - using specific capabilities instead
     devices:
       - /dev/snd:/dev/snd  # Audio devices
     depends_on:
