@@ -40,32 +40,26 @@ COPY . .
 RUN mkdir -p /app/logs /etc/pulse /tmp/pulse && \
     chmod +x /app/*.sh 2>/dev/null || true
 
-# Create minimal PulseAudio configuration for Ubuntu 18 compatibility
-RUN echo "default-server = unix:/tmp/pulse-socket" > /etc/pulse/client.conf && \
+# Create minimal PulseAudio configuration (optional, for compatibility)
+RUN echo "# PulseAudio client config - fallback only" > /etc/pulse/client.conf && \
     echo "autospawn = no" >> /etc/pulse/client.conf && \
-    echo "daemon-binary = /usr/bin/pulseaudio" >> /etc/pulse/client.conf && \
-    echo "extra-arguments = --log-target=syslog" >> /etc/pulse/client.conf
+    echo "daemon-binary = /bin/false" >> /etc/pulse/client.conf
 
-# Create ALSA configuration for better device access
-RUN echo "# ALSA configuration for container audio access" > /etc/asound.conf && \
-    echo "# Try PulseAudio first, fallback to direct hardware access" >> /etc/asound.conf && \
+# Create ALSA configuration for direct hardware access (no PulseAudio dependency)
+RUN echo "# ALSA configuration for direct hardware access" > /etc/asound.conf && \
     echo "pcm.!default {" >> /etc/asound.conf && \
-    echo "    type pulse" >> /etc/asound.conf && \
-    echo "    server unix:/tmp/pulse-socket" >> /etc/asound.conf && \
-    echo "    fallback {" >> /etc/asound.conf && \
-    echo "        type hw" >> /etc/asound.conf && \
-    echo "        card 0" >> /etc/asound.conf && \
-    echo "        device 0" >> /etc/asound.conf && \
-    echo "    }" >> /etc/asound.conf && \
+    echo "    type hw" >> /etc/asound.conf && \
+    echo "    card 0" >> /etc/asound.conf && \
+    echo "    device 0" >> /etc/asound.conf && \
     echo "}" >> /etc/asound.conf && \
     echo "ctl.!default {" >> /etc/asound.conf && \
-    echo "    type pulse" >> /etc/asound.conf && \
-    echo "    server unix:/tmp/pulse-socket" >> /etc/asound.conf && \
-    echo "    fallback {" >> /etc/asound.conf && \
-    echo "        type hw" >> /etc/asound.conf && \
-    echo "        card 0" >> /etc/asound.conf && \
-    echo "    }" >> /etc/asound.conf && \
-    echo "}" >> /etc/asound.conf
+    echo "    type hw" >> /etc/asound.conf && \
+    echo "    card 0" >> /etc/asound.conf && \
+    echo "}" >> /etc/asound.conf && \
+    echo "# Alternative PCM devices" >> /etc/asound.conf && \
+    echo "pcm.hw0 { type hw; card 0; device 0; }" >> /etc/asound.conf && \
+    echo "pcm.hw1 { type hw; card 1; device 0; }" >> /etc/asound.conf && \
+    echo "pcm.hw2 { type hw; card 2; device 0; }" >> /etc/asound.conf
 
 # Copy and set up the audio setup script
 COPY setup-audio.sh /app/setup-audio.sh

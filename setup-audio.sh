@@ -154,20 +154,21 @@ fi
 
 # Set up environment variables for audio
 log "🌍 Setting up audio environment variables..."
-export PULSE_SERVER="${PULSE_SERVER:-unix:/tmp/pulse-socket}"
-export ALSA_DEVICE="${ALSA_DEVICE:-default}"
-export AUDIO_DEVICE="${AUDIO_DEVICE:-default}"
-
-# For direct ALSA access when PulseAudio is not available
+export ALSA_DEVICE="${ALSA_DEVICE:-hw:0,0}"
+export AUDIO_DEVICE="${AUDIO_DEVICE:-hw:0,0}"
 export ALSA_PCM_CARD="${ALSA_PCM_CARD:-0}"
 export ALSA_PCM_DEVICE="${ALSA_PCM_DEVICE:-0}"
 
+# Disable PulseAudio to force ALSA direct access
+unset PULSE_SERVER
+export PULSE_RUNTIME_PATH=""
+
 log "📋 Audio environment:"
-log "   PULSE_SERVER: $PULSE_SERVER"
 log "   ALSA_DEVICE: $ALSA_DEVICE"
 log "   AUDIO_DEVICE: $AUDIO_DEVICE"
 log "   ALSA_PCM_CARD: $ALSA_PCM_CARD"
 log "   ALSA_PCM_DEVICE: $ALSA_PCM_DEVICE"
+log "   PULSE_SERVER: (disabled for direct ALSA access)"
 
 # Create runtime directories
 log "📁 Creating runtime directories..."
@@ -189,6 +190,27 @@ if [ "$BUILD_MODE" = "false" ]; then
     else
         log "⚠️ Cannot test audio access - no control device"
     fi
+    
+    # Test specific ALSA device access
+    log "🎵 Testing ALSA device access..."
+    if [ -c "/dev/snd/pcmC0D0p" ]; then
+        log "✅ Playback device pcmC0D0p available"
+    else
+        log "⚠️ Playback device pcmC0D0p not found"
+    fi
+    
+    if [ -c "/dev/snd/pcmC0D0c" ]; then
+        log "✅ Capture device pcmC0D0c available"  
+    else
+        log "⚠️ Capture device pcmC0D0c not found"
+    fi
+    
+    # Test ALSA device enumeration
+    if command -v aplay >/dev/null; then
+        log "🎤 Testing ALSA device enumeration..."
+        aplay -l 2>/dev/null | head -5 || log "⚠️ aplay -l failed"
+    fi
+    
 else
     log "⏭️ Skipping audio access tests (build mode)"
 fi

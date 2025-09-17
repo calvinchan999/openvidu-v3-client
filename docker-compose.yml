@@ -60,11 +60,10 @@ services:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
       
-      # Audio configuration for Ubuntu 18
-      - ALSA_DEVICE=default
-      - AUDIO_DEVICE=default
-      - PULSE_RUNTIME_PATH=/run/user/1000/pulse
-      - ALSA_PCM_CARD=default
+      # Audio configuration for Ubuntu 18 - Direct ALSA access
+      - ALSA_DEVICE=hw:0,0
+      - AUDIO_DEVICE=hw:0,0
+      - ALSA_PCM_CARD=0
       - ALSA_PCM_DEVICE=0
       
       # WebRTC and media configuration
@@ -72,8 +71,8 @@ services:
       - MEDIA_DEVICES_ENABLED=true
       - AUTOPLAY_POLICY=no-user-gesture-required
       
-      # Basic Chrome flags (optimized for Ubuntu 18 audio)
-      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--use-fake-ui-for-media-stream,--use-fake-device-for-media-stream,--autoplay-policy=no-user-gesture-required,--disable-features=VizDisplayCompositor,--disable-background-timer-throttling,--allow-running-insecure-content,--alsa-output-device=default,--alsa-input-device=default,--enable-audio-service-sandbox=false
+      # Basic Chrome flags (optimized for Ubuntu 18 direct ALSA access)
+      - CHROME_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu,--use-fake-ui-for-media-stream,--use-fake-device-for-media-stream,--autoplay-policy=no-user-gesture-required,--disable-features=VizDisplayCompositor,--disable-background-timer-throttling,--allow-running-insecure-content,--alsa-output-device=hw:0,0,--alsa-input-device=hw:0,0,--enable-audio-service-sandbox=false,--disable-audio-output
       
       # Logging and debugging
       - ENABLE_LOGGING=true
@@ -92,11 +91,9 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./.env:/app/.env:ro
-      # Audio device access for Ubuntu 18
+      # Audio device access for Ubuntu 18 - Direct hardware access
       - /dev/snd:/dev/snd:rw
       - /sys/class/sound:/sys/class/sound:ro
-      # PulseAudio socket (if available)
-      - /run/user/1000/pulse:/run/user/1000/pulse:ro
     tmpfs:
       - /app/.config/chromium:uid=1000,gid=1000,mode=755
       - /app/.cache:uid=1000,gid=1000,mode=755
