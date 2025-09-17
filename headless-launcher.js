@@ -41,12 +41,17 @@ const puppeteer = require("puppeteer");
         "--disable-features=VizDisplayCompositor",
         "--use-fake-ui-for-media-stream",
         "--use-fake-device-for-media-stream",
+        "--fake-device-for-media-stream",
+        "--use-file-for-fake-audio-capture=/dev/zero",
         "--autoplay-policy=no-user-gesture-required",
         "--allow-running-insecure-content",
         "--disable-background-timer-throttling",
         "--disable-backgrounding-occluded-windows",
         "--disable-renderer-backgrounding",
-        "--disable-extensions"
+        "--disable-extensions",
+        "--enable-logging",
+        "--log-level=0",
+        "--disable-gpu-sandbox"
       ];
     
     // Launch the browser with retry logic
@@ -133,50 +138,81 @@ const puppeteer = require("puppeteer");
     
     console.log("✅ Successfully loaded the OpenVidu v3 application");
     
-    // Inject audio device access helpers
+    // Inject enhanced audio device access helpers for OpenVidu
     await page.evaluate(() => {
-      console.log("Injecting audio device access helpers...");
+      console.log("Injecting enhanced audio device access helpers for OpenVidu...");
       
-      // Override getUserMedia to provide fake devices if needed
+      // Create a more robust fake audio stream generator
+      const createFakeAudioStream = () => {
+        try {
+          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          
+          // Create a more realistic audio stream with multiple tracks
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          const destination = audioContext.createMediaStreamDestination();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(destination);
+          
+          // Generate a more natural audio signal (sine wave at 440Hz)
+          oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+          gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+          oscillator.type = 'sine';
+          
+          oscillator.start();
+          
+          console.log("Created fake audio stream with AudioContext");
+          return destination.stream;
+        } catch (error) {
+          console.log("AudioContext failed, creating minimal fake stream:", error.message);
+          
+          // Fallback: create a minimal fake stream
+          const canvas = document.createElement('canvas');
+          canvas.width = 1;
+          canvas.height = 1;
+          const canvasStream = canvas.captureStream();
+          
+          // Add fake audio track
+          const audioTrack = new MediaStreamTrack();
+          audioTrack.kind = 'audio';
+          audioTrack.enabled = true;
+          audioTrack.readyState = 'live';
+          
+          return new MediaStream([audioTrack]);
+        }
+      };
+      
+      // Override getUserMedia with better error handling
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
         
         navigator.mediaDevices.getUserMedia = async (constraints) => {
-          console.log("getUserMedia called with constraints:", constraints);
+          console.log("getUserMedia called with constraints:", JSON.stringify(constraints));
           
           try {
-            // Try to get real devices first
+            // First try to get real devices
             const stream = await originalGetUserMedia(constraints);
-            console.log("Successfully got real media stream");
+            console.log("Successfully got real media stream with tracks:", stream.getTracks().length);
             return stream;
           } catch (error) {
-            console.log("Failed to get real media stream, using fake stream:", error.message);
+            console.log("Real media stream failed, creating fake stream:", error.message);
             
-            // Create a fake audio stream if real devices fail
+            // Create fake stream based on constraints
             if (constraints.audio) {
-              const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-              const oscillator = audioContext.createOscillator();
-              const gainNode = audioContext.createGain();
-              
-              oscillator.connect(gainNode);
-              gainNode.connect(audioContext.destination);
-              
-              oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
-              gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-              
-              // Create a MediaStream from the audio context
-              const destination = audioContext.createMediaStreamDestination();
-              gainNode.connect(destination);
-              
-              return destination.stream;
+              const fakeStream = createFakeAudioStream();
+              console.log("Created fake audio stream for getUserMedia");
+              return fakeStream;
             }
             
-            throw error;
+            // If no audio constraints, still try to provide something
+            console.log("No audio constraints, providing minimal stream");
+            return new MediaStream();
           }
         };
       }
       
-      // Override enumerateDevices to provide fake devices
+      // Override enumerateDevices to provide comprehensive fake devices
       if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
         const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
         
@@ -184,26 +220,44 @@ const puppeteer = require("puppeteer");
           try {
             const devices = await originalEnumerateDevices();
             console.log("Successfully enumerated real devices:", devices.length);
-            return devices;
-          } catch (error) {
-            console.log("Failed to enumerate real devices, providing fake devices:", error.message);
             
-            // Return fake devices
-            return [
-              {
-                deviceId: "fake-audio-input",
-                kind: "audioinput",
-                label: "Fake Microphone",
-                groupId: "fake-group"
-              },
-              {
-                deviceId: "fake-audio-output",
-                kind: "audiooutput", 
-                label: "Fake Speaker",
-                groupId: "fake-group"
-              }
-            ];
+            // If we have real devices, use them
+            if (devices && devices.length > 0) {
+              console.log("Real devices found:", devices.map(d => `${d.kind}: ${d.label || 'unlabeled'}`));
+              return devices;
+            }
+          } catch (error) {
+            console.log("Failed to enumerate real devices:", error.message);
           }
+          
+          // Provide comprehensive fake devices that OpenVidu expects
+          console.log("Providing fake audio devices for OpenVidu");
+          return [
+            {
+              deviceId: "default-audio-input",
+              kind: "audioinput",
+              label: "Default - Microphone (USB Audio Device)",
+              groupId: "usb-audio-group-1"
+            },
+            {
+              deviceId: "fake-microphone-1",
+              kind: "audioinput", 
+              label: "Microphone (Built-in Audio)",
+              groupId: "builtin-audio-group"
+            },
+            {
+              deviceId: "default-audio-output",
+              kind: "audiooutput",
+              label: "Default - Speakers (USB Audio Device)", 
+              groupId: "usb-audio-group-1"
+            },
+            {
+              deviceId: "fake-speakers-1",
+              kind: "audiooutput",
+              label: "Speakers (Built-in Audio)",
+              groupId: "builtin-audio-group"
+            }
+          ];
         };
       }
       
