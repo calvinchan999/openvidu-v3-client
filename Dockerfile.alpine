@@ -19,7 +19,8 @@ RUN apk add --no-cache \
     nano \
     su-exec \
     wget \
-    gnupg
+    gnupg \
+    curl
 
 # Install Google Chrome (since Alpine doesn't have official Chrome, we'll use Chromium but symlink it)
 RUN apk add --no-cache chromium && \

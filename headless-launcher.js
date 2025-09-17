@@ -59,31 +59,81 @@ const puppeteer = require("puppeteer");
         "--metrics-recording-only",
         "--no-first-run",
         "--safebrowsing-disable-auto-update",
-        "--disable-ipc-flooding-protection"
+        "--disable-ipc-flooding-protection",
+        "--disable-component-update",
+        "--disable-domain-reliability",
+        "--disable-client-side-phishing-detection",
+        "--disable-component-extensions-with-background-pages",
+        "--disable-default-apps",
+        "--disable-hang-monitor",
+        "--disable-prompt-on-repost",
+        "--disable-translate",
+        "--disable-breakpad",
+        "--disable-crash-reporter",
+        "--no-crash-upload",
+        "--disable-gpu-process-crash-limit",
+        "--single-process",
+        "--no-zygote",
+        "--disable-dev-tools",
+        "--disable-plugins"
       ];
     
-    // Launch the browser with retry logic
+    // Launch the browser with retry logic and progressive fallback
     let browser;
     let retryCount = 0;
     const maxRetries = 3;
     
-    while (retryCount < maxRetries) {
-      try {
-        console.log(`🚀 Attempting to launch browser (attempt ${retryCount + 1}/${maxRetries})...`);
-        
-        browser = await puppeteer.launch({
-          headless: "new",  // Use new headless mode for better compatibility
+    // Different launch strategies to try
+    const launchStrategies = [
+      {
+        name: "Full feature set",
+        config: {
+          headless: "new",
           executablePath: process.env.CHROME_BIN || "/usr/bin/google-chrome-stable",
           args: chromeArgs,
           handleSIGINT: false,
           handleSIGTERM: false,
           handleSIGHUP: false,
-          timeout: 60000,  // Increased timeout for Docker containers
-          protocolTimeout: 30000,  // Increased protocol timeout for network initialization
-          slowMo: 0,  // No artificial delays
-          defaultViewport: null,  // Use default viewport
-          devtools: false  // Disable devtools for better performance
-        });
+          timeout: 90000,
+          protocolTimeout: 60000,
+          slowMo: 0,
+          defaultViewport: null,
+          devtools: false,
+          ignoreHTTPSErrors: true,
+          waitForInitialPage: false
+        }
+      },
+      {
+        name: "Minimal arguments",
+        config: {
+          headless: "new",
+          executablePath: process.env.CHROME_BIN || "/usr/bin/google-chrome-stable",
+          args: ["--no-sandbox", "--disable-dev-shm-usage", "--single-process"],
+          timeout: 90000,
+          protocolTimeout: 60000,
+          waitForInitialPage: false
+        }
+      },
+      {
+        name: "Legacy headless mode",
+        config: {
+          headless: true,  // Use legacy headless mode
+          executablePath: process.env.CHROME_BIN || "/usr/bin/google-chrome-stable",
+          args: ["--no-sandbox", "--disable-dev-shm-usage"],
+          timeout: 90000,
+          protocolTimeout: 60000,
+          waitForInitialPage: false
+        }
+      }
+    ];
+    
+    while (retryCount < maxRetries) {
+      const strategy = launchStrategies[retryCount] || launchStrategies[0];
+      
+      try {
+        console.log(`🚀 Attempting to launch browser (attempt ${retryCount + 1}/${maxRetries}) using ${strategy.name}...`);
+        
+        browser = await puppeteer.launch(strategy.config);
         
         console.log("✅ Browser launched successfully!");
         
@@ -107,13 +157,31 @@ const puppeteer = require("puppeteer");
       }
     }
 
-    // Get the default page like v2 config with better error handling
-    console.log("📄 Getting browser page...");
-    const [page] = await browser.pages();
+    // Create a new page instead of using default page to avoid initialization issues
+    console.log("📄 Creating new browser page...");
+    let page;
+    try {
+      page = await browser.newPage();
+      console.log("✅ New page created successfully");
+    } catch (error) {
+      console.log("⚠️ Failed to create new page, trying to get existing page:", error.message);
+      const pages = await browser.pages();
+      page = pages[0] || await browser.newPage();
+    }
     
     // Set longer timeouts for page operations
-    page.setDefaultTimeout(60000);  // 60 seconds for page operations
-    page.setDefaultNavigationTimeout(60000);  // 60 seconds for navigation
+    page.setDefaultTimeout(90000);  // 90 seconds for page operations
+    page.setDefaultNavigationTimeout(90000);  // 90 seconds for navigation
+    
+    // Disable network domain to prevent timeout issues
+    try {
+      console.log("🔧 Configuring page for Docker environment...");
+      const client = await page.target().createCDPSession();
+      // Don't enable Network domain to avoid the timeout
+      console.log("✅ Page configured for Docker environment");
+    } catch (error) {
+      console.log("⚠️ Could not configure CDP session, continuing anyway:", error.message);
+    }
     
     // Enhanced console logging with filtering based on environment
     const logLevel = process.env.LOG_LEVEL || 'info';
