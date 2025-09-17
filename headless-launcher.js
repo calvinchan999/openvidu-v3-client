@@ -51,7 +51,15 @@ const puppeteer = require("puppeteer");
         "--disable-extensions",
         "--enable-logging",
         "--log-level=0",
-        "--disable-gpu-sandbox"
+        "--disable-gpu-sandbox",
+        "--disable-software-rasterizer",
+        "--disable-background-networking",
+        "--disable-default-apps",
+        "--disable-sync",
+        "--metrics-recording-only",
+        "--no-first-run",
+        "--safebrowsing-disable-auto-update",
+        "--disable-ipc-flooding-protection"
       ];
     
     // Launch the browser with retry logic
@@ -70,11 +78,19 @@ const puppeteer = require("puppeteer");
           handleSIGINT: false,
           handleSIGTERM: false,
           handleSIGHUP: false,
-          timeout: 30000,
-          protocolTimeout: 10000
+          timeout: 60000,  // Increased timeout for Docker containers
+          protocolTimeout: 30000,  // Increased protocol timeout for network initialization
+          slowMo: 0,  // No artificial delays
+          defaultViewport: null,  // Use default viewport
+          devtools: false  // Disable devtools for better performance
         });
         
         console.log("✅ Browser launched successfully!");
+        
+        // Wait a moment for browser to fully initialize
+        console.log("⏳ Waiting for browser to fully initialize...");
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
         break;
         
       } catch (error) {
@@ -91,8 +107,13 @@ const puppeteer = require("puppeteer");
       }
     }
 
-    // Get the default page like v2 config
+    // Get the default page like v2 config with better error handling
+    console.log("📄 Getting browser page...");
     const [page] = await browser.pages();
+    
+    // Set longer timeouts for page operations
+    page.setDefaultTimeout(60000);  // 60 seconds for page operations
+    page.setDefaultNavigationTimeout(60000);  // 60 seconds for navigation
     
     // Enhanced console logging with filtering based on environment
     const logLevel = process.env.LOG_LEVEL || 'info';
